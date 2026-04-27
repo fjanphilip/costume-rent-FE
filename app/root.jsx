@@ -16,6 +16,10 @@ export default function App() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        <script
+          src="https://app.sandbox.midtrans.com/snap/snap.js"
+          data-client-key="Mid-client-fHhqdeUTRL3pBnNF"
+        ></script>
       </head>
       <body className="bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary">
         <Outlet />
@@ -26,4 +30,4 @@ export default function App() {
   );
 }
 
-
+

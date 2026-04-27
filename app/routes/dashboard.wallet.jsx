@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { json } from "@remix-run/node";
-import { useOutletContext, useFetcher, useLoaderData } from "@remix-run/react";
+import { useOutletContext, useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import * as Icons from "lucide-react";
 import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Badge } from "~/components/ui/badge";
 import { getSession } from "~/lib/session.server";
 
 export const loader = async ({ request }) => {
@@ -45,297 +46,333 @@ export const action = async ({ request }) => {
         "Authorization": `Bearer ${token}`
       },
       body: JSON.stringify({
-        transaction_type: intent, // Top_Up or Withdraw
-        type, // Credit or Debit
+        transaction_type: intent,
+        type,
         amount: parseInt(amount),
         description
       })
     });
 
     const result = await response.json();
-
-    if (response.ok) {
-      return json({ success: true, message: result.message || "Transaksi berhasil diajukan!" });
-    }
-    return json({ success: false, message: result.message || "Terjadi kesalahan pada transaksi." }, { status: 400 });
+    if (response.ok) return json({ success: true, ...result });
+    return json({ success: false, message: result.message || "Transaksi gagal." }, { status: 400 });
   } catch (error) {
-    console.error("Wallet Action Error:", error);
-    return json({ success: false, message: "Server error. Coba lagi nanti." }, { status: 500 });
+    return json({ success: false, message: "Server error." }, { status: 500 });
   }
 };
 
 export default function WalletPage() {
   const { user } = useOutletContext();
   const { balance } = useLoaderData();
-  
-  const depositFetcher = useFetcher();
-  const withdrawFetcher = useFetcher();
+  const fetcher = useFetcher();
+  const revalidator = useRevalidator();
 
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [successType, setSuccessType] = useState(null); // 'deposit' or 'withdraw'
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [transactionId, setTransactionId] = useState(null);
+  const [currentStatus, setCurrentStatus] = useState("Idle");
+  const processedTokenRef = useRef(null);
 
-  // Handle successful actions
+  // Midtrans & Polling Integration
   useEffect(() => {
-    if (depositFetcher.data?.success) {
-      setDepositAmount("");
-      alert("Top Up berhasil diajukan! Saldo akan bertambah setelah verifikasi.");
+    const snapToken = fetcher.data?.snap_token;
+    const newTrxId = fetcher.data?.data?.id;
+
+    if (snapToken && processedTokenRef.current !== snapToken) {
+      if (window.snap) {
+        processedTokenRef.current = snapToken;
+        setTransactionId(newTrxId);
+        setCurrentStatus("Pending");
+        
+        window.snap.pay(snapToken, {
+          onSuccess: function (result) {
+            try {
+              if (window.snap && typeof window.snap.hide === 'function') {
+                window.snap.hide();
+              }
+            } catch (e) {}
+            setDepositAmount("");
+            setSuccessType("deposit");
+            setCurrentStatus("Completed");
+            revalidator.revalidate();
+            processedTokenRef.current = null;
+          },
+          onPending: () => setCurrentStatus("Pending"),
+          onClose: () => {
+            processedTokenRef.current = null;
+            revalidator.revalidate();
+          }
+        });
+      }
     }
-  }, [depositFetcher.data]);
+  }, [fetcher.data, revalidator]);
 
   useEffect(() => {
-    if (withdrawFetcher.data?.success) {
-      setWithdrawAmount("");
-      alert("Penarikan saldo berhasil diajukan! Mohon tunggu 1x24 jam.");
+    let pollInterval;
+    if (transactionId && currentStatus === "Pending") {
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/check-deposit-status?id=${transactionId}`);
+          const data = await res.json();
+          if (data.status === "Completed") {
+            try {
+              if (window.snap && typeof window.snap.hide === 'function') {
+                window.snap.hide(); 
+              }
+            } catch (e) {
+              console.warn("Midtrans hide error:", e);
+            }
+            setCurrentStatus("Completed");
+            setSuccessType("deposit");
+            setTransactionId(null);
+            revalidator.revalidate();
+          }
+        } catch (e) {}
+      }, 5000);
     }
-  }, [withdrawFetcher.data]);
+    return () => clearInterval(pollInterval);
+  }, [transactionId, currentStatus, revalidator]);
+
+  const processedWithdrawRef = useRef(null);
+
+  // Handle Withdraw Success -> WhatsApp Redirect
+  useEffect(() => {
+    const trxData = fetcher.data?.data;
+    if (fetcher.data?.success && trxData?.transaction_type === "Withdraw") {
+      // Pastikan hanya running jika ID transaksi ini belum pernah diproses
+      if (processedWithdrawRef.current !== trxData.id) {
+        processedWithdrawRef.current = trxData.id;
+        
+        const amount = trxData.amount;
+        const refId = trxData.reference_id;
+        const adminPhone = "6283832352467";
+        
+        const message = `Halo Admin, saya ingin mengajukan penarikan saldo:\n\n` +
+                        `Nominal: Rp ${amount.toLocaleString('id-ID')}\n` +
+                        `Ref ID: ${refId}\n` +
+                        `Rekening: BCA - 1234567890 a/n ${user?.name || 'Jan Philip Faith'}\n\n` +
+                        `Mohon segera diproses. Terima kasih.`;
+        
+        const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
+        
+        window.open(whatsappUrl, '_blank');
+        
+        setWithdrawAmount("");
+        setSuccessType("withdraw");
+        revalidator.revalidate();
+      }
+    }
+  }, [fetcher.data, revalidator, user?.name]);
 
   const handleDeposit = () => {
-    if (!depositAmount || parseInt(depositAmount) < 10000) {
-      alert("Minimal Top Up adalah Rp 10.000");
-      return;
-    }
-    depositFetcher.submit(
-      {
-        intent: "Top_Up",
-        type: "Credit",
-        amount: depositAmount,
-        description: "Top up saldo deposit via Transfer Bank"
-      },
+    const amt = parseInt(depositAmount);
+    if (!amt || amt < 10000) return setErrorMsg("Minimal pengisian saldo adalah Rp 10.000");
+    fetcher.submit(
+      { intent: "Top_Up", type: "Credit", amount: depositAmount, description: "Top up via Midtrans" },
       { method: "post" }
     );
   };
 
   const handleWithdraw = () => {
     const amt = parseInt(withdrawAmount);
-    if (!amt || amt < 50000) {
-      alert("Minimal penarikan adalah Rp 50.000");
-      return;
-    }
-    if (amt > balance) {
-      alert("Saldo tidak mencukupi!");
-      return;
-    }
-    withdrawFetcher.submit(
-      {
-        intent: "Withdraw",
-        type: "Debit",
-        amount: withdrawAmount,
-        description: `Tarik saldo ke Rekening BCA - 1234567890 a/n ${user.name}`
+    if (!amt || amt < 50000) return setErrorMsg("Minimal penarikan dana adalah Rp 50.000");
+    if (amt > balance) return setErrorMsg("Saldo Anda tidak mencukupi untuk penarikan ini.");
+    
+    fetcher.submit(
+      { 
+        intent: "Withdraw", 
+        type: "Debit", 
+        amount: withdrawAmount, 
+        description: `Tarik saldo ke Rekening BCA - 1234567890 a/n ${user?.name || 'Jan Philip Faith'}` 
       },
       { method: "post" }
     );
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <header className="flex flex-col gap-1 text-left">
-        <h1 className="text-3xl font-black tracking-tight text-foreground uppercase italic">My Wallet</h1>
-        <p className="text-muted-foreground text-sm font-medium italic">Kelola saldo dan transaksi pembayaran Anda dengan aman.</p>
-      </header>
+    <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-10 animate-in fade-in duration-700">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Dompet Saya</h1>
+        <p className="text-sm text-slate-500">Kelola saldo deposit dan riwayat transaksi keuangan Anda.</p>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
-        {/* Balance Card */}
-        <div className="lg:col-span-4 space-y-6">
-          <Card className="border-none shadow-xl rounded-[2.5rem] bg-slate-900 text-white overflow-hidden relative p-1">
-            <CardContent className="p-10 space-y-10 relative z-10">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Available Balance</p>
-                  <p className="text-4xl font-black italic tracking-tighter text-white">Rp {balance.toLocaleString('id-ID')}</p>
-                </div>
-                <div className="h-14 w-14 bg-white/5 backdrop-blur-3xl rounded-2xl flex items-center justify-center border border-white/10 shadow-inner">
-                  <Icons.Wallet className="h-6 w-6 bg-emerald-500/10 text-emerald-400" />
-                </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-10 items-start">
+        <div className="lg:col-span-5 xl:col-span-4 space-y-6">
+          <Card className="bg-slate-900 text-white border-none shadow-lg overflow-hidden relative">
+            <CardContent className="p-8 space-y-6 relative z-10">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Saldo</span>
+                <Icons.Wallet className="h-5 w-5 text-primary" />
               </div>
-
-              <div className="flex items-center gap-4 text-[10px] font-black">
-                <div className="flex gap-1 items-center bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/20 shadow-sm">
-                  <Icons.ShieldCheck className="h-4 w-4" /> SECURE
-                </div>
-                <span className="opacity-40 uppercase tracking-widest italic">Fully Encrypted</span>
+              <div className="space-y-1">
+                <h2 className="text-3xl font-bold leading-none">
+                  Rp {balance.toLocaleString('id-ID')}
+                </h2>
+                <p className="text-xs text-slate-400">Tersedia untuk disewa</p>
               </div>
-
-              <div className="pt-6 border-t border-white/5 flex justify-between items-center">
-                <div className="text-[9px] font-black opacity-30 uppercase tracking-[0.3em] font-mono">SewaCosplay Card</div>
-                <div className="flex -space-x-2 group cursor-pointer hover:opacity-100 opacity-60 transition-opacity">
-                  <div className="h-5 w-5 bg-emerald-400 rounded-full blur-[1px]"></div>
-                  <div className="h-5 w-5 bg-emerald-600 rounded-full blur-[1px]"></div>
-                </div>
+              <div className="pt-4 border-t border-white/10 flex items-center gap-2">
+                <Icons.ShieldCheck className="h-4 w-4 text-emerald-400" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Terverifikasi</span>
               </div>
             </CardContent>
-            {/* Glossy decorative element */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[100px] -mr-32 -mt-32"></div>
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-[60px] -ml-16 -mb-16"></div>
+            <div className="absolute -right-8 -bottom-8 h-32 w-32 bg-primary/20 rounded-full blur-3xl"></div>
           </Card>
 
-          <Card className="border-none shadow-sm rounded-[2.5rem] bg-slate-50 border border-slate-100 p-8 space-y-4">
-            <div className="flex items-center gap-3 text-slate-900 group">
-              <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary transition-transform group-hover:scale-110">
-                <Icons.BadgePercent className="h-5 w-5" />
-              </div>
-              <span className="text-sm font-black uppercase italic tracking-tight">Cashback Promo!</span>
-            </div>
-            <p className="text-xs text-slate-500 font-medium italic leading-relaxed">
-              Dapatkan cashback 5% untuk setiap deposit minimal Rp 500.000 menggunakan QRIS. Berlaku hingga akhir bulan ini!
-            </p>
+          <Card className="border-slate-100 bg-slate-50/50 p-6 space-y-3">
+             <div className="flex items-center gap-2 text-slate-900 font-bold">
+               <Icons.Zap className="h-4 w-4 text-primary" />
+               <span className="text-sm">Info Deposit</span>
+             </div>
+             <p className="text-xs text-slate-500 leading-relaxed">
+               Gunakan QRIS atau E-Wallet untuk pengisian saldo instan. Saldo akan bertambah otomatis setelah pembayaran berhasil.
+             </p>
           </Card>
         </div>
 
-        {/* Transaction Forms */}
-        <Card className="lg:col-span-8 border-none shadow-sm rounded-[3rem] bg-white overflow-hidden border border-slate-50 shadow-slate-200/50">
-          <Tabs defaultValue="deposit" className="w-full">
-            <div className="px-10 pt-10 flex items-center justify-between">
-              <TabsList className="bg-slate-100/50 border border-slate-100 p-1.5 rounded-[2rem] h-auto">
-                <TabsTrigger value="deposit" className="rounded-[1.5rem] px-10 py-3 font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-xl data-[state=active]:shadow-slate-200 transition-all">
-                  Deposit
-                </TabsTrigger>
-                <TabsTrigger value="withdraw" className="rounded-[1.5rem] px-10 py-3 font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-white data-[state=active]:text-rose-600 data-[state=active]:shadow-xl data-[state=active]:shadow-slate-200 transition-all">
-                  Withdraw
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            <TabsContent value="deposit" className="p-10 space-y-8 mt-0 animate-in fade-in slide-in-from-left-4 duration-500">
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-2">Nominal Deposit</label>
-                  <div className="relative group">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-slate-300 group-focus-within:text-primary transition-colors">Rp</span>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      className="pl-16 h-18 rounded-[2rem] border-2 border-slate-50 bg-slate-50/50 font-black text-2xl text-slate-900 focus-visible:ring-primary/10 focus:border-primary/30 transition-all shadow-inner placeholder:text-slate-200"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {[50000, 100000, 250000, 500000].map(amt => (
-                    <Button
-                      key={amt}
-                      variant="outline"
-                      onClick={() => setDepositAmount(amt.toString())}
-                      className={`rounded-2xl border-2 h-14 font-black text-xs transition-all active:scale-95 ${depositAmount === amt.toString() ? 'border-primary bg-primary/5 text-primary shadow-lg shadow-primary/5' : 'border-slate-50 hover:border-slate-200 hover:bg-slate-50 text-slate-500'
-                        }`}
-                    >
-                      + {amt.toLocaleString('id-ID')}
-                    </Button>
-                  ))}
-                </div>
-
-                <div className="space-y-3 pt-6">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-2">Pilih Metode Pembayaran</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between p-6 rounded-[2rem] border-2 border-primary bg-primary/5 cursor-pointer group shadow-lg shadow-primary/5 transition-all">
-                      <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center p-2 shadow-xl shadow-primary/10 transition-transform group-hover:scale-110">
-                          <Icons.QrCode className="h-6 w-6 text-primary" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-black uppercase italic tracking-tight">QRIS / E-Wallet</span>
-                          <span className="text-[9px] font-bold text-primary/60 uppercase tracking-widest mt-0.5 italic">Instant Payment</span>
-                        </div>
-                      </div>
-                      <div className="h-6 w-6 rounded-full border-4 border-primary bg-white flex items-center justify-center">
-                        <div className="h-2 w-2 rounded-full bg-primary"></div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between p-6 rounded-[2rem] border-2 border-slate-50 hover:border-slate-200 cursor-pointer group transition-all opacity-40 grayscale">
-                      <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center p-2">
-                          <Icons.CreditCard className="h-6 w-6 text-slate-300" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-black uppercase italic tracking-tight text-slate-400">Transfer Bank</span>
-                          <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5 italic">Manual Check</span>
-                        </div>
-                      </div>
-                      <div className="h-6 w-6 rounded-full border-2 border-slate-100 bg-white"></div>
-                    </div>
-                  </div>
-                </div>
+        <div className="lg:col-span-7 xl:col-span-8">
+          <Card className="border-slate-100 shadow-sm overflow-hidden rounded-2xl sm:rounded-3xl">
+            <Tabs defaultValue="deposit" className="w-full">
+              <div className="border-b border-slate-100 px-4 sm:px-8 pt-6">
+                <TabsList className="bg-slate-100/50 p-1 rounded-xl h-12 w-full max-w-[320px] grid grid-cols-2">
+                  <TabsTrigger value="deposit" className="rounded-lg py-2 text-sm font-semibold transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    Isi Saldo
+                    {currentStatus === "Pending" && <span className="ml-2 h-2 w-2 bg-primary rounded-full animate-pulse" />}
+                  </TabsTrigger>
+                  <TabsTrigger value="withdraw" className="rounded-lg py-2 text-sm font-semibold transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                    Tarik Dana
+                  </TabsTrigger>
+                </TabsList>
               </div>
 
-              <Button
-                onClick={handleDeposit}
-                disabled={depositFetcher.state !== "idle" || !depositAmount}
-                className="w-full h-18 rounded-[2rem] bg-slate-900 hover:bg-primary transition-all text-white font-black text-lg uppercase italic tracking-tighter shadow-2xl shadow-slate-900/10 active:scale-95 flex gap-4"
-              >
-                {depositFetcher.state !== "idle" ? (
-                  <Icons.Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  <Icons.Zap className="h-6 w-6 text-primary animate-pulse" />
-                )}
-                {depositFetcher.state !== "idle" ? "Processing..." : "Top Up Sekarang"}
-              </Button>
-            </TabsContent>
-
-            <TabsContent value="withdraw" className="p-10 space-y-8 mt-0 animate-in fade-in slide-in-from-right-4 duration-500">
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-2 text-rose-600">Nominal Penarikan</label>
-                  <div className="relative group">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-slate-300 group-focus-within:text-rose-500 transition-colors">Rp</span>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      className="pl-16 h-18 rounded-[2rem] border-2 border-slate-50 bg-slate-50/50 font-black text-2xl text-rose-600 focus-visible:ring-rose-500/10 focus:border-rose-500/30 transition-all shadow-inner placeholder:text-slate-200"
-                    />
+              <div className="p-8">
+                <TabsContent value="deposit" className="space-y-6 mt-0 animate-in fade-in duration-300">
+                  <div className="space-y-4">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Masukkan Nominal</label>
+                    <div className="relative group">
+                      <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-slate-400">Rp</span>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={depositAmount}
+                        onChange={(e) => setDepositAmount(e.target.value)}
+                        className="pl-12 h-14 text-xl font-bold rounded-2xl border-slate-200 focus:border-primary transition-all shadow-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[50000, 100000, 250000, 500000].map(amt => (
+                        <Button
+                          key={amt}
+                          variant="outline"
+                          onClick={() => setDepositAmount(amt.toString())}
+                          className={`rounded-xl h-12 font-bold text-xs transition-all ${depositAmount === amt.toString() ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-500'}`}
+                        >
+                          + {amt.toLocaleString('id-ID')}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center px-2">
-                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest italic">Maksimal penarikan: Rp {balance.toLocaleString('id-ID')}</p>
-                    <button onClick={() => setWithdrawAmount(balance.toString())} className="text-[9px] font-black text-rose-500 uppercase tracking-widest hover:underline italic">Tarik Semua</button>
-                  </div>
-                </div>
 
-                <div className="space-y-3 pt-4">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-2">Rekening Tujuan</label>
-                  <div className="p-8 rounded-[2.5rem] border-2 border-slate-50 bg-slate-50/30 flex flex-col gap-2 relative overflow-hidden group">
-                    <div className="flex justify-between items-start relative z-10">
+                  <Button
+                    onClick={handleDeposit}
+                    disabled={fetcher.state !== "idle" || !depositAmount}
+                    className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-md transition-all flex gap-3"
+                  >
+                    {fetcher.state !== "idle" ? <Icons.Loader2 className="h-5 w-5 animate-spin" /> : <Icons.Zap className="h-5 w-5" />}
+                    {fetcher.state !== "idle" ? "Memproses..." : "Top Up Sekarang"}
+                  </Button>
+                </TabsContent>
+
+                <TabsContent value="withdraw" className="space-y-6 mt-0 animate-in fade-in duration-300">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nominal Penarikan</label>
+                      <button onClick={() => setWithdrawAmount(balance.toString())} className="text-xs font-bold text-primary hover:underline">Tarik Semua</button>
+                    </div>
+                    <div className="relative group">
+                      <span className="absolute left-5 top-1/2 -translate-y-1/2 font-bold text-slate-400">Rp</span>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={withdrawAmount}
+                        onChange={(e) => setWithdrawAmount(e.target.value)}
+                        className="pl-12 h-14 text-xl font-bold rounded-2xl border-slate-200 focus:border-primary transition-all shadow-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-6 rounded-2xl border border-slate-200 bg-slate-50 space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
+                        <Icons.CreditCard className="h-6 w-6 text-slate-600" />
+                      </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-lg uppercase tracking-widest mb-2 inline-block">Primary</span>
-                        <p className="text-base font-black text-slate-900 italic tracking-tight">Bank Central Asia (BCA)</p>
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">**** **** 1234 - {user?.name?.toUpperCase() || "MEMBER"}</p>
+                        <p className="text-sm font-bold text-slate-900">Bank Central Asia (BCA)</p>
+                        <p className="text-xs text-slate-500 uppercase tracking-wider">**** 1234 • {user?.name}</p>
                       </div>
-                      <Icons.CreditCard className="h-10 w-10 text-slate-100 transition-transform group-hover:scale-110" />
                     </div>
-                    <div className="absolute -bottom-10 -right-10 h-32 w-32 bg-slate-500/5 rounded-full blur-2xl transition-transform group-hover:scale-150"></div>
                   </div>
-                  <Button variant="link" className="text-slate-400 hover:text-rose-500 font-black text-[10px] uppercase tracking-widest p-2 h-auto italic">+ Ganti Info Rekening</Button>
-                </div>
-              </div>
 
-              <div className="bg-rose-50/50 border border-rose-100 p-6 rounded-[2rem] flex gap-4">
-                <div className="h-10 w-10 rounded-2xl bg-rose-500/10 flex items-center justify-center shrink-0">
-                  <Icons.ShieldAlert className="h-5 w-5 text-rose-500" />
-                </div>
-                <p className="text-[10px] leading-relaxed text-rose-800 font-medium italic">
-                  Penarikan saldo membutuhkan verifikasi keamanan. Proses dana masuk ke rekening Anda adalah <span className="font-black">1x24 jam</span> (Hari Kerja). Pastikan informasi Anda sudah valid.
-                </p>
+                  <Button
+                    onClick={handleWithdraw}
+                    disabled={fetcher.state !== "idle" || !withdrawAmount}
+                    className="w-full h-14 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-md transition-all flex gap-3"
+                  >
+                    {fetcher.state !== "idle" ? <Icons.Loader2 className="h-5 w-5 animate-spin" /> : <Icons.ArrowDownToLine className="h-5 w-5" />}
+                    {fetcher.state !== "idle" ? "Memproses..." : "Tarik Dana"}
+                  </Button>
+                </TabsContent>
               </div>
-
-              <Button
-                variant="destructive"
-                onClick={handleWithdraw}
-                disabled={withdrawFetcher.state !== "idle" || !withdrawAmount}
-                className="w-full h-18 rounded-[2rem] bg-rose-600 hover:bg-rose-700 transition-all text-white font-black text-lg uppercase italic tracking-tighter shadow-2xl shadow-rose-500/20 active:scale-95 flex gap-4 border-none"
-              >
-                {withdrawFetcher.state !== "idle" ? (
-                  <Icons.Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  <Icons.ArrowDownToLine className="h-6 w-6" />
-                )}
-                {withdrawFetcher.state !== "idle" ? "Processing..." : "Tarik Saldo Sekarang"}
-              </Button>
-            </TabsContent>
-          </Tabs>
-        </Card>
+            </Tabs>
+          </Card>
+        </div>
       </div>
+
+      {/* Success Modal */}
+      {successType && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-500">
+          <Card className="max-w-sm w-full border-none shadow-xl rounded-3xl bg-white overflow-hidden animate-in zoom-in-95 duration-300">
+            <CardContent className="p-8 flex flex-col items-center text-center space-y-6">
+              <div className="h-20 w-20 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-200">
+                <Icons.Check className="h-10 w-10 text-white" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-slate-900">
+                  {successType === 'deposit' ? 'Top Up Berhasil!' : 'Pengajuan Berhasil!'}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {successType === 'deposit' 
+                    ? 'Saldo Anda telah diperbarui secara otomatis. Terima kasih!' 
+                    : 'Permintaan penarikan Anda telah kami terima. Admin akan segera memprosesnya.'}
+                </p>
+                {successType === 'withdraw' && (
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase bg-emerald-50 px-3 py-1 rounded-full">WhatsApp Admin Telah Dibuka</p>
+                )}
+              </div>
+              <Button onClick={() => setSuccessType(null)} className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">Tutup</Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Error Modal */}
+      {errorMsg && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <Card className="max-w-sm w-full border-none shadow-xl rounded-3xl bg-white overflow-hidden animate-in zoom-in-95 duration-300">
+            <CardContent className="p-8 flex flex-col items-center text-center space-y-6">
+              <div className="h-20 w-20 bg-rose-500 rounded-full flex items-center justify-center shadow-lg shadow-rose-200">
+                <Icons.AlertCircle className="h-10 w-10 text-white" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-slate-900">Gagal</h3>
+                <p className="text-sm text-slate-500">{errorMsg}</p>
+              </div>
+              <Button onClick={() => setErrorMsg(null)} className="w-full h-12 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold">Saya Mengerti</Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
