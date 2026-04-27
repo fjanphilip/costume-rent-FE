@@ -22,20 +22,36 @@ export const loader = async ({ request }) => {
       "Authorization": `Bearer ${token}`
     };
 
-    // Fetch latest user data to check verification status
+    // 1. Fetch latest user data
     const userRes = await fetch(`http://127.0.0.1:8000/api/user`, { headers });
     if (!userRes.ok) return redirect("/login");
-    const latestUser = await userRes.json();
+    const userDataResponse = await userRes.json();
+    const latestUser = userDataResponse.data || userDataResponse.user || userDataResponse;
 
+    // 2. Fetch Costume Details
     const response = await fetch(`http://127.0.0.1:8000/api/costumes/${costumeSlug}`, {
       headers
     });
-    
     if (!response.ok) return redirect("/catalog");
-
     const costume = await response.json();
 
-    return json({ user: latestUser, costume, initialStartDate: startDate, initialEndDate: endDate });
+    // 3. Fetch Booked Dates for this costume
+    const bookedDatesRes = await fetch(`http://127.0.0.1:8000/api/costumes/${costume.id}/booked-dates`, {
+      headers
+    });
+    let bookedDates = [];
+    if (bookedDatesRes.ok) {
+       const bookedData = await bookedDatesRes.json();
+       bookedDates = bookedData.booked_dates || bookedData.data || [];
+    }
+
+    return json({ 
+      user: latestUser, 
+      costume, 
+      bookedDates,
+      initialStartDate: startDate, 
+      initialEndDate: endDate 
+    });
   } catch (error) {
     console.error("Checkout Loader Error:", error);
     return redirect("/catalog");
@@ -49,7 +65,21 @@ export const action = async ({ request }) => {
   const formData = await request.formData();
   const costume_id = formData.get("costume_id");
   const start_date = formData.get("start_date");
+  const end_date = formData.get("end_date");
   const duration_days = formData.get("duration_days");
+  const payment_method = "midtrans"; // Changed to midtrans
+  const notes = formData.get("notes") || "";
+
+  // Fetch latest user data to verify status on server-side
+  const userRes = await fetch(`http://127.0.0.1:8000/api/user`, {
+    headers: { "Accept": "application/json", "Authorization": `Bearer ${token}` }
+  });
+  const userDataResponse = await userRes.json();
+  const user = userDataResponse.data || userDataResponse.user || userDataResponse;
+
+  if (user.is_verified != 1 && user.is_verified !== true && user.is_verified !== "1") {
+    return json({ error: "Akun Anda belum terverifikasi. Silakan verifikasi KTP/ID Anda terlebih dahulu." }, { status: 403 });
+  }
 
   try {
     const response = await fetch("http://127.0.0.1:8000/api/bookings/checkout", {
@@ -62,21 +92,27 @@ export const action = async ({ request }) => {
       body: JSON.stringify({
         costume_id,
         start_date,
-        duration_days,
-        payment_method: "bank_transfer"
+        end_date,
+        duration_days: parseInt(duration_days),
+        payment_method,
+        notes
       })
     });
 
     const result = await response.json();
 
     if (response.ok) {
-       // Redirect to success or payment page
-       return redirect("/dashboard");
+       // Return snap_token to the frontend instead of redirecting
+       return json({ 
+         success: true, 
+         snap_token: result.snap_token || result.data?.snap_token 
+       });
     }
 
-    return json({ error: result.message || "Gagal melakukan checkout" }, { status: 400 });
+    return json({ error: result.message || "Gagal melakukan checkout." }, { status: 400 });
   } catch (error) {
-    return json({ error: "Terjadi kesalahan server" }, { status: 500 });
+    console.error("Checkout Action Error:", error);
+    return json({ error: "Terjadi kesalahan server saat memproses pesanan." }, { status: 500 });
   }
 };
 

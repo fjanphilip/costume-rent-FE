@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import * as Icons from "lucide-react";
-import { useLoaderData, Form, Link } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, Link, useNavigate } from "@remix-run/react";
 import { Navbar } from "../home-catalog/components/Navbar";
 import { Footer } from "~/components/layout/Footer";
 import { Button } from "~/components/ui/button";
@@ -9,11 +9,61 @@ import { Badge } from "~/components/ui/badge";
 import { format } from "date-fns";
 
 export default function CheckoutFeature() {
-  const { user, costume, initialStartDate, initialEndDate } = useLoaderData();
+  const { user, costume, bookedDates: initialBookedDates, initialStartDate, initialEndDate } = useLoaderData();
+  const actionData = useActionData();
+  const navigate = useNavigate();
+  const hasOpenedSnap = useRef(false);
+
   const [date, setDate] = useState({
     from: initialStartDate ? new Date(initialStartDate) : undefined,
     to: initialEndDate ? new Date(initialEndDate) : undefined,
   });
+  const [notes, setNotes] = useState("");
+
+  // Convert booked dates strings to Date objects
+  const bookedDates = useMemo(() => {
+    return (initialBookedDates || []).map(d => new Date(d));
+  }, [initialBookedDates]);
+
+  // Handle Midtrans Snap
+  useEffect(() => {
+    if (actionData?.snap_token && !hasOpenedSnap.current) {
+      if (window.snap) {
+        hasOpenedSnap.current = true;
+        try {
+          window.snap.pay(actionData.snap_token, {
+            onSuccess: (result) => {
+              console.log("Payment success:", result);
+              navigate("/dashboard");
+            },
+            onPending: (result) => {
+              console.log("Payment pending:", result);
+              navigate("/dashboard");
+            },
+            onError: (result) => {
+              console.error("Payment error:", result);
+              hasOpenedSnap.current = false;
+              alert("Terjadi kesalahan pada pembayaran.");
+            },
+            onClose: () => {
+              console.log("Payment modal closed");
+              hasOpenedSnap.current = false;
+            }
+          });
+        } catch (err) {
+          console.error("Snap Pay Error:", err);
+          hasOpenedSnap.current = false;
+        }
+      } else {
+        alert("Sistem pembayaran (Snap.js) sedang dimuat. Mohon tunggu sebentar.");
+      }
+    }
+    
+    // Reset ref if actionData is cleared
+    if (!actionData?.snap_token) {
+      hasOpenedSnap.current = false;
+    }
+  }, [actionData, navigate]);
 
   // Simple duration calculation
   const calculateDays = () => {
@@ -28,7 +78,7 @@ export default function CheckoutFeature() {
   const deposit = costume.required_deposit;
   const grandTotal = totalPrice + deposit;
 
-  const isVerified = user.is_verified === 1 || user.is_verified === true;
+  const isVerified = user.is_verified == 1 || user.is_verified === true || user.is_verified === "1";
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F8F9FC] text-left">
@@ -66,6 +116,14 @@ export default function CheckoutFeature() {
                   Verifikasi Sekarang
                 </Button>
               </Link>
+            </div>
+          )}
+
+          {/* Action Error Message */}
+          {actionData?.error && (
+            <div className="mb-8 p-4 rounded-2xl bg-rose-600 text-white font-bold text-sm text-center flex items-center justify-center gap-2 shadow-xl shadow-rose-200 animate-in zoom-in-95">
+               <Icons.AlertCircle className="h-5 w-5" />
+               {actionData.error}
             </div>
           )}
 
@@ -118,6 +176,23 @@ export default function CheckoutFeature() {
                         setDate={setDate} 
                         className="w-full"
                         label="Durasi Rental"
+                        bookedDates={bookedDates}
+                     />
+                  </div>
+
+                  {/* Notes Field */}
+                  <div className="space-y-4">
+                     <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
+                           <Icons.MessageSquare className="h-5 w-5" />
+                        </div>
+                        <h3 className="text-lg font-black italic uppercase tracking-tight">Catatan Tambahan</h3>
+                     </div>
+                     <textarea 
+                        placeholder="Contoh: Tolong pastikan ukurannya pas ya bangsss."
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="w-full min-h-[100px] p-4 rounded-3xl bg-slate-50 border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-slate-900 outline-none transition-all resize-none"
                      />
                   </div>
 
@@ -159,8 +234,11 @@ export default function CheckoutFeature() {
                            <span className="text-lg font-black italic text-slate-800">Rp {deposit.toLocaleString('id-ID')}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                           <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic">Biaya Admin</span>
-                           <span className="text-lg font-black italic text-emerald-600">Gratis</span>
+                           <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic">Pembayaran</span>
+                           <Badge className="bg-blue-600 text-white border-none px-3 py-1 text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                              <Icons.ShieldCheck className="h-3 w-3" />
+                              MIDTRANS SECURED
+                           </Badge>
                         </div>
                      </div>
                   </div>
@@ -182,15 +260,30 @@ export default function CheckoutFeature() {
                      <Form method="post">
                         <input type="hidden" name="costume_id" value={costume.id} />
                         <input type="hidden" name="start_date" value={date?.from ? format(date.from, "yyyy-MM-dd") : ""} />
+                        <input type="hidden" name="end_date" value={date?.to ? format(date.to, "yyyy-MM-dd") : ""} />
                         <input type="hidden" name="duration_days" value={days} />
+                        <input type="hidden" name="notes" value={notes} />
 
                         <Button 
                            type="submit" 
-                           disabled={!date?.from || !date?.to}
-                           className="w-full h-18 rounded-[1.8rem] bg-slate-900 hover:bg-primary transition-all text-white font-black text-xl shadow-2xl shadow-slate-900/20 group"
+                           disabled={!date?.from || !date?.to || !isVerified}
+                           className={`w-full h-18 rounded-[1.8rem] transition-all text-white font-black text-xl shadow-2xl group ${
+                              !isVerified 
+                              ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                              : 'bg-slate-900 hover:bg-primary shadow-slate-900/20'
+                           }`}
                         >
-                           Selesaikan Pesanan
-                           <Icons.ChevronRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
+                           {isVerified ? (
+                              <>
+                                 Bayar Sekarang
+                                 <Icons.ChevronRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
+                              </>
+                           ) : (
+                              <>
+                                 <Icons.Lock className="mr-2 h-6 w-6" />
+                                 Verifikasi Diperlukan
+                              </>
+                           )}
                         </Button>
                      </Form>
                   </div>
@@ -217,7 +310,7 @@ export default function CheckoutFeature() {
           </div>
 
           <p className="text-center mt-10 text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed px-10">
-            Pastikan data yang Anda masukkan benar. Pembayaran akan diproses melalui sistem <span className="text-slate-900">Midtrans</span> untuk menjamin keamanan Anda.
+            Pembayaran akan diproses secara aman melalui <span className="text-slate-900">Midtrans Snap</span>. Semua data Anda terenkripsi.
           </p>
 
         </div>

@@ -39,7 +39,14 @@ export const action = async ({ request }) => {
     }
 
     const token = data.token || data.access_token;
-    return createUserSession(data.user.id, data.user, token, "/");
+    
+    // Role-based redirection
+    let redirectTo = "/";
+    if (data.user.role === "admin") {
+      redirectTo = "/admin";
+    }
+
+    return createUserSession(data.user.id, data.user, token, redirectTo);
   } catch (error) {
 
     console.error("Login Action Error:", error);
