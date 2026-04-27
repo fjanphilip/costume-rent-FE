@@ -114,10 +114,10 @@ export default function DashboardOverview() {
   };
 
   return (
-    <div className="space-y-8 text-left">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-3xl font-black tracking-tight italic">Halo, {userName}! 👋</h1>
-        <p className="text-muted-foreground text-sm font-medium italic">Selamat datang kembali. Cek status penyewaan kostum kamu di sini.</p>
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-10 animate-in fade-in duration-700">
+      <header className="flex flex-col gap-1 text-left">
+        <h1 className="text-2xl sm:text-3xl font-black tracking-tight italic leading-tight">Halo, {userName}! 👋</h1>
+        <p className="text-muted-foreground text-xs sm:text-sm font-medium italic">Selamat datang kembali. Cek status penyewaan kostum kamu di sini.</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
