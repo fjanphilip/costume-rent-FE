@@ -42,7 +42,7 @@ export const loader = async ({ request }) => {
     let bookedDates = [];
     if (bookedDatesRes.ok) {
        const bookedData = await bookedDatesRes.json();
-       bookedDates = bookedData.booked_dates || bookedData.data || [];
+       bookedDates = Array.isArray(bookedData) ? bookedData : (bookedData.booked_dates || bookedData.data || []);
     }
 
     return json({ 

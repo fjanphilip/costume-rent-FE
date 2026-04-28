@@ -99,7 +99,36 @@ export const action = async ({ request }) => {
 
   if (intent === "confirm_return") {
     try {
+      const apiFormData = new FormData();
+      apiFormData.append("damage_fine", formData.get("damage_fine") || 0);
+      apiFormData.append("damage_description", formData.get("damage_description") || "");
+      
+      const file = formData.get("damage_proof_image");
+      if (file && file.size > 0) {
+        apiFormData.append("damage_proof_image", file);
+      }
+
       const response = await fetch(`http://127.0.0.1:8000/api/admin/bookings/${id}/confirm-return`, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: apiFormData
+      });
+
+      const result = await response.json();
+      if (response.ok) return json({ status: "success", ...result });
+      return json({ status: "error", message: result.message }, { status: 400 });
+    } catch (e) {
+      console.error("Action Error:", e);
+      return json({ status: "error", message: "Network error" }, { status: 500 });
+    }
+  }
+
+  if (intent === "confirm_payment") {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/admin/bookings/${id}/confirm-payment`, {
         method: "POST",
         headers: {
           "Accept": "application/json",
@@ -123,6 +152,11 @@ export default function AdminBookingsPage() {
   const fetcher = useFetcher();
   const [editingTracking, setEditingTracking] = useState(null);
   const [tempTracking, setTempTracking] = useState("");
+  const [verifyingBooking, setVerifyingBooking] = useState(null);
+  const [fineAmount, setFineAmount] = useState(0);
+  const [fineReason, setFineReason] = useState("");
+  const [damageFile, setDamageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   // Show error alerts
   const lastError = fetcher.data?.status === "error" ? fetcher.data.message : null;
@@ -139,10 +173,15 @@ export default function AdminBookingsPage() {
     });
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
+  const getStatusColor = (status, booking = null) => {
+    const statusVal = (status?.value || status || '').toString();
+    switch (statusVal) {
       case 'Paid':
-      case 'Completed': return 'bg-emerald-500 text-white';
+      case 'Completed': 
+        if (booking && Number(booking.total_fine) > Number(booking.locked_deposit_amount)) {
+            return 'bg-emerald-600 text-white border-2 border-emerald-300';
+        }
+        return 'bg-emerald-500 text-white';
       case 'Returned': return 'bg-purple-600 text-white';
       case 'Shipping':
       case 'Rented': return 'bg-blue-600 text-white';
@@ -172,6 +211,30 @@ export default function AdminBookingsPage() {
       { method: 'post' }
     );
     setEditingTracking(null);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setDamageFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSubmitVerify = (bookingId) => {
+    const formData = new FormData();
+    formData.append("intent", "confirm_return");
+    formData.append("id", bookingId);
+    formData.append("damage_fine", fineAmount);
+    formData.append("damage_description", fineReason);
+    if (damageFile) {
+      formData.append("damage_proof_image", damageFile);
+    }
+
+    fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
+    setVerifyingBooking(null);
+    setDamageFile(null);
+    setPreviewUrl(null);
   };
 
   return (
@@ -287,7 +350,7 @@ export default function AdminBookingsPage() {
                             value={booking.status}
                             onChange={(e) => handleStatusChange(booking, e.target.value)}
                             disabled={fetcher.state !== 'idle'}
-                            className={`appearance-none cursor-pointer border-none font-black text-[9px] rounded-lg px-3 py-1.5 tracking-widest shadow-sm outline-none transition-all pr-8 ${getStatusColor(booking.status)}`}
+                            className={`appearance-none cursor-pointer border-none font-black text-[9px] rounded-lg px-3 py-1.5 tracking-widest shadow-sm outline-none transition-all pr-8 ${getStatusColor(booking.status, booking)}`}
                           >
                             {BOOKING_STATUSES.map(status => (
                               <option key={status} value={status} className="bg-white text-slate-900 font-bold uppercase py-2">
@@ -296,23 +359,131 @@ export default function AdminBookingsPage() {
                             ))}
                           </select>
                           <Icons.ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none opacity-50" />
+                          {booking.status === 'Completed' && Number(booking.total_fine) > Number(booking.locked_deposit_amount) && (
+                            <div className="mt-1 flex items-center gap-1 text-emerald-600 font-black text-[7px] uppercase tracking-tighter italic">
+                               <Icons.CheckCircle2 className="h-2 w-2" /> Denda Lunas (Midtrans)
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-8 py-6 text-right">
-                        {booking.status === 'Returned' && (
-                          <Button 
-                            size="sm" 
-                            className="bg-purple-600 hover:bg-purple-700 text-white font-black text-[10px] uppercase rounded-xl h-10 px-6 italic tracking-widest shadow-lg shadow-purple-600/20 active:scale-95 transition-all"
-                            onClick={() => {
-                              if(confirm('Konfirmasi pengembalian kostum ini? Pastikan barang sudah dicek.')) {
-                                fetcher.submit({ intent: 'confirm_return', id: booking.id }, { method: 'post' });
-                              }
-                            }}
-                            disabled={fetcher.state !== 'idle'}
-                          >
-                            <Icons.CheckCircle2 className="h-4 w-4 mr-2" />
-                            Verify & Complete
-                          </Button>
+                        {booking.status === 'Returned' && !booking.returned_at && (
+                          <div className="flex flex-col items-end gap-3">
+                            {verifyingBooking === booking.id ? (
+                              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <div className="bg-white p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+                                  <div className="space-y-1">
+                                    <h3 className="text-xl font-black italic uppercase tracking-tight">Verify Return</h3>
+                                    <p className="text-xs text-slate-400 font-medium italic">Input denda dan bukti kerusakan jika ada.</p>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="space-y-1.5">
+                                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Denda Kerusakan (Rp)</p>
+                                      <Input 
+                                        type="number"
+                                        value={fineAmount}
+                                        onChange={(e) => setFineAmount(e.target.value)}
+                                        className="h-12 rounded-2xl border-slate-200 text-sm font-bold"
+                                        placeholder="0"
+                                      />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Alasan / Deskripsi</p>
+                                      <Input 
+                                        value={fineReason}
+                                        onChange={(e) => setFineReason(e.target.value)}
+                                        className="h-12 rounded-2xl border-slate-200 text-sm font-medium"
+                                        placeholder="Contoh: Baju robek di lengan..."
+                                      />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Bukti Foto</p>
+                                      <div className="flex flex-col gap-3">
+                                        {previewUrl && (
+                                          <div className="relative h-32 w-full rounded-2xl overflow-hidden border-2 border-primary/20">
+                                            <img src={previewUrl} className="w-full h-full object-cover" alt="Preview" />
+                                            <button 
+                                              onClick={() => { setDamageFile(null); setPreviewUrl(null); }}
+                                              className="absolute top-2 right-2 p-1 bg-rose-500 text-white rounded-full"
+                                            >
+                                              <Icons.X className="h-3 w-3" />
+                                            </button>
+                                          </div>
+                                        )}
+                                        <label className="cursor-pointer flex items-center justify-center gap-2 h-12 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl hover:border-primary/50 transition-all text-slate-400 hover:text-primary">
+                                          <Icons.Camera className="h-4 w-4" />
+                                          <span className="text-[10px] font-black uppercase tracking-widest">Upload Bukti</span>
+                                          <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                                        </label>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex gap-3 pt-2">
+                                    <Button 
+                                      className="flex-1 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl h-12 font-black uppercase text-[11px] tracking-widest shadow-xl shadow-slate-900/20 italic"
+                                      onClick={() => handleSubmitVerify(booking.id)}
+                                    >
+                                      Submit Verification
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      className="h-12 w-12 rounded-2xl text-rose-500 hover:bg-rose-50 p-0 border border-slate-100"
+                                      onClick={() => { setVerifyingBooking(null); setPreviewUrl(null); }}
+                                    >
+                                      <Icons.X className="h-5 w-5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <Button 
+                                size="sm" 
+                                className="bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] uppercase rounded-xl h-10 px-6 italic tracking-widest shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                                onClick={() => {
+                                  setVerifyingBooking(booking.id);
+                                  setFineAmount(0);
+                                  setFineReason("");
+                                  setDamageFile(null);
+                                  setPreviewUrl(null);
+                                }}
+                              >
+                                <Icons.ShieldCheck className="h-4 w-4 mr-2" />
+                                Verify Return
+                              </Button>
+                            )}
+                          </div>
+                        )}
+
+                        {booking.status === 'Returned' && booking.returned_at && (
+                          <div className="flex flex-col items-end gap-2">
+                             <div className="bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-lg mb-1 flex items-center gap-2">
+                                <Icons.CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest italic">Checked</span>
+                             </div>
+                             
+                             {Number(booking.total_fine) > Number(booking.locked_deposit_amount) ? (
+                                <div className="bg-rose-50 border border-rose-100 px-4 py-3 rounded-2xl flex flex-col items-end gap-1">
+                                   <p className="text-[9px] font-black text-rose-600 uppercase tracking-widest">User Kurang Bayar</p>
+                                   <p className="text-xs font-black text-rose-700 italic">Rp {(Number(booking.total_fine) - Number(booking.locked_deposit_amount)).toLocaleString('id-ID')}</p>
+                                   <p className="text-[8px] text-rose-400 italic">Menunggu Pelunasan Sisa Denda...</p>
+                                </div>
+                             ) : (
+                                <Button 
+                                  size="sm" 
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase rounded-xl h-10 px-6 italic tracking-widest shadow-lg shadow-emerald-600/20 active:scale-95 transition-all"
+                                  onClick={() => {
+                                    if(confirm('Konfirmasi bahwa sisa deposit sudah ditransfer manual?')) {
+                                      fetcher.submit({ intent: 'confirm_payment', id: booking.id }, { method: 'post' });
+                                    }
+                                  }}
+                                >
+                                  <Icons.DollarSign className="h-4 w-4 mr-2" />
+                                  Confirm Refund
+                                </Button>
+                             )}
+                          </div>
                         )}
                       </td>
                     </tr>

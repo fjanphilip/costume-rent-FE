@@ -4,7 +4,6 @@ import { getSession } from "~/lib/session.server";
 import { useState, useRef } from "react";
 import * as Icons from "lucide-react";
 import { Card, CardContent } from "~/components/ui/card";
-import { TransactionTable } from "~/features/user-dashboard/components/TransactionTable";
 import { BookingTable } from "~/features/user-dashboard/components/BookingTable";
 import { Button } from "~/components/ui/button";
 
@@ -12,7 +11,7 @@ export const loader = async ({ request }) => {
   const session = await getSession(request);
   const token = session.get("token");
 
-  if (!token) return json({ transactions: [], bookings: [], accessories: [] });
+  if (!token) return json({ bookings: [], accessories: [] });
 
   try {
     const headers = {
@@ -20,28 +19,22 @@ export const loader = async ({ request }) => {
       "Authorization": `Bearer ${token}`
     };
 
-    // Parallel fetch for transactions, bookings, accessories, and balance
-    const [txRes, bookingsRes, accessoriesRes, balanceRes] = await Promise.all([
-      fetch("http://127.0.0.1:8000/api/deposit/transactions", { headers }),
+    // Parallel fetch for bookings, accessories
+    const [bookingsRes, accessoriesRes] = await Promise.all([
       fetch("http://127.0.0.1:8000/api/bookings", { headers }),
       fetch("http://127.0.0.1:8000/api/accessories", { headers }),
-      fetch("http://127.0.0.1:8000/api/deposit/balance", { headers })
     ]);
 
-    const txData = txRes.ok ? await txRes.json() : { data: [] };
     const bookingsData = bookingsRes.ok ? await bookingsRes.json() : { data: [] };
     const accessoriesData = accessoriesRes.ok ? await accessoriesRes.json() : { data: [] };
-    const balanceData = balanceRes.ok ? await balanceRes.json() : { deposit_balance: 0 };
 
     return json({ 
-      transactions: txData.data || [], 
       bookings: bookingsData.data || [],
       accessories: accessoriesData.data || [],
-      balance: balanceData.deposit_balance || 0
     });
   } catch (error) {
     console.error("Dashboard Overview Loader Error:", error);
-    return json({ transactions: [], bookings: [], accessories: [], balance: 0 });
+    return json({ bookings: [], accessories: [] });
   }
 };
 
@@ -145,12 +138,51 @@ export const action = async ({ request }) => {
     }
   }
 
+  if (intent === "get_payment_token") {
+    const bookingId = formData.get("booking_id");
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/payment-token`, {
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        return json({ success: true, snap_token: data.snap_token });
+      }
+      return json({ error: data.message }, { status: 400 });
+    } catch (error) {
+      return json({ error: "Gagal menghubungi server." }, { status: 500 });
+    }
+  }
+
+  if (intent === "pay_fine") {
+    const bookingId = formData.get("booking_id");
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/pay-fine`, {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        return json({ success: true, snap_token: data.snap_token });
+      }
+      return json({ error: data.message }, { status: 400 });
+    } catch (error) {
+      return json({ error: "Gagal menghubungi server." }, { status: 500 });
+    }
+  }
+
   return null;
 };
 
 export default function DashboardOverview() {
   const { user } = useOutletContext();
-  const { transactions, bookings, accessories, balance } = useLoaderData();
+  const { bookings, accessories } = useLoaderData();
   const fetcher = useFetcher();
   const userName = user?.name || "Member";
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -162,7 +194,6 @@ export default function DashboardOverview() {
   const activeRentalsCount = bookings.filter(b => 
     ['Paid', 'Preparing', 'Rented', 'Pending_Payment'].includes(b.status)
   ).length;
-  const depositBalance = Number(balance) || 0;
 
   const handleVerificationSubmit = () => {
     const adminPhone = "6283832352467";
@@ -200,18 +231,7 @@ export default function DashboardOverview() {
         <p className="text-muted-foreground text-xs sm:text-sm font-medium italic">Selamat datang kembali. Cek status penyewaan kostum kamu di sini.</p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-none shadow-sm rounded-3xl bg-primary text-white overflow-hidden relative group">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start mb-4">
-              <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Wallet Balance</span>
-              <Icons.Wallet className="h-5 w-5 fill-white/20" />
-            </div>
-            <p className="text-3xl sm:text-4xl font-black italic">Rp {depositBalance.toLocaleString('id-ID')}</p>
-            <p className="text-[10px] mt-2 font-bold opacity-60 italic">Saldo siap digunakan</p>
-          </CardContent>
-          <div className="absolute -bottom-4 -right-4 h-24 w-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden border border-slate-100">
           <CardContent className="p-6">
@@ -239,7 +259,6 @@ export default function DashboardOverview() {
       </div>
 
       <div className="space-y-10">
-        <TransactionTable transactions={transactions.slice(0, 5)} title="Recent Wallet Activity" />
         <BookingTable bookings={bookings.slice(0, 5)} title="Recent Bookings" accessories={accessories} />
       </div>
 

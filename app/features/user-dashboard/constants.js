@@ -1,7 +1,7 @@
 export const USER_MENU = [
   { label: "Overview", href: "/dashboard", icon: "LayoutGrid" },
+  { label: "My Bookings", href: "/dashboard/bookings", icon: "Package" },
   { label: "History", href: "/dashboard/history", icon: "History" },
-  { label: "Wallet", href: "/dashboard/wallet", icon: "Wallet" },
   { label: "Settings", href: "/dashboard/settings", icon: "Settings" },
 ];
 

@@ -75,12 +75,6 @@ export function Navbar({ user }) {
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className="rounded-lg focus:bg-slate-100 cursor-pointer py-2.5 px-3 text-sm text-slate-700">
-                      <Link to="/dashboard/wallet" className="flex items-center w-full">
-                        <Icons.Wallet className="mr-3 h-4 w-4" />
-                        Wallet
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="rounded-lg focus:bg-slate-100 cursor-pointer py-2.5 px-3 text-sm text-slate-700">
                       <Link to="/dashboard/history" className="flex items-center w-full">
                         <Icons.History className="mr-3 h-4 w-4" />
                         History

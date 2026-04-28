@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as Icons from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -19,6 +19,7 @@ export function BookingTable({
 }) {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [fineModalOpen, setFineModalOpen] = useState(false);
   const [returnResi, setReturnResi] = useState("");
   const [returnFile, setReturnFile] = useState(null);
   const fetcher = useFetcher();
@@ -33,7 +34,8 @@ export function BookingTable({
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
+    const statusVal = (status?.value || status || '').toString();
+    switch (statusVal) {
       case 'Paid':
       case 'Completed':
         return 'bg-emerald-500 text-white shadow-emerald-500/20';
@@ -45,6 +47,8 @@ export function BookingTable({
       case 'Cancelled':
       case 'Rejected':
         return 'bg-rose-500 text-white shadow-rose-500/20';
+      case 'Returned':
+        return 'bg-slate-600 text-white shadow-slate-600/20';
       default:
         return 'bg-slate-400 text-white';
     }
@@ -80,6 +84,30 @@ export function BookingTable({
     fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
     setReturnModalOpen(false);
     setSelectedBooking(null);
+  };
+
+  // Trigger Midtrans Snap when fetcher returns a token
+  useEffect(() => {
+     if (fetcher.data?.snap_token) {
+        // Tutup semua modal dashboard sebelum membuka Midtrans
+        setSelectedBooking(null);
+        setFineModalOpen(false);
+        setReturnModalOpen(false);
+        
+        window.snap.pay(fetcher.data.snap_token, {
+           onSuccess: () => window.location.reload(),
+           onPending: () => window.location.reload(),
+           onError: () => alert("Pembayaran gagal."),
+           onClose: () => console.log("Snap closed")
+        });
+     }
+  }, [fetcher.data]);
+
+  const handlePayment = (bookingId) => {
+     fetcher.submit(
+        { intent: "get_payment_token", booking_id: bookingId },
+        { method: "post" }
+     );
   };
 
   return (
@@ -173,6 +201,16 @@ export function BookingTable({
                         Detail
                        </Button>
                        
+                       {booking.status === 'Pending_Payment' && (
+                         <Button 
+                          size="sm" 
+                          className="rounded-xl h-10 px-4 font-black uppercase text-[10px] tracking-widest bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/20 active:scale-95"
+                          onClick={() => handlePayment(booking.id)}
+                         >
+                          Bayar Sekarang
+                         </Button>
+                       )}
+
                        {booking.status === 'Shipping' && (
                          <Button 
                           size="sm" 
@@ -195,6 +233,51 @@ export function BookingTable({
                           Ajukan Pengembalian
                          </Button>
                        )}
+
+                       {((booking.status?.value || booking.status)?.toLowerCase() === 'returned') && !booking.returned_at && (
+                         <div className="flex items-center gap-2 text-amber-600 px-3 py-1.5 bg-amber-50 rounded-lg border border-amber-200 animate-pulse whitespace-nowrap">
+                            <Icons.Loader2 className="h-3 w-3 animate-spin" />
+                            <span className="text-[8px] font-black uppercase tracking-widest">Pengecekan Admin</span>
+                         </div>
+                       )}
+
+                       {((booking.status?.value || booking.status)?.toLowerCase() === 'returned') && booking.returned_at && (
+                         <div className="flex flex-col items-end gap-2">
+                            {Number(booking.total_fine) > Number(booking.locked_deposit_amount) ? (
+                              <Button 
+                                size="sm" 
+                                className="rounded-xl h-10 px-4 font-black uppercase text-[10px] tracking-widest bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 active:scale-95 flex items-center gap-2"
+                                onClick={() => {
+                                  setSelectedBooking(booking);
+                                  setFineModalOpen(true);
+                                }}
+                              >
+                                <Icons.AlertCircle className="h-4 w-4" />
+                                Review & Bayar Denda
+                              </Button>
+                            ) : (
+                              <Button 
+                               size="sm" 
+                               className="rounded-xl h-10 px-4 font-black uppercase text-[10px] tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 active:scale-95"
+                               onClick={() => {
+                                 const adminPhone = "6283832352467";
+                                 const amount = Number(booking.locked_deposit_amount);
+                                 const finalAmount = amount - (Number(booking.total_fine) || 0);
+                                 const message = `Halo Admin, saya ingin mengajukan pengembalian deposit:\n\n` +
+                                                 `No. Booking: ${booking.booking_code}\n` +
+                                                 `Deposit Awal: Rp ${amount.toLocaleString('id-ID')}\n` +
+                                                 `Total Denda: Rp ${(Number(booking.total_fine) || 0).toLocaleString('id-ID')}\n` +
+                                                 `Estimasi Refund: Rp ${finalAmount.toLocaleString('id-ID')}\n\n` +
+                                                 `Mohon segera diproses ke rekening saya. Terima kasih.`;
+                                 const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
+                                 window.open(whatsappUrl, '_blank');
+                               }}
+                              >
+                                Tarik Deposit
+                              </Button>
+                            )}
+                         </div>
+                       )}
                     </div>
                  </td>
               </tr>
@@ -213,7 +296,7 @@ export function BookingTable({
       </div>
 
       {/* Booking Detail Modal */}
-      <Dialog open={!!selectedBooking} onOpenChange={() => setSelectedBooking(null)}>
+      <Dialog open={!!selectedBooking && !fineModalOpen && !returnModalOpen} onOpenChange={() => setSelectedBooking(null)}>
         <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white rounded-[3rem] border-none shadow-2xl">
             {selectedBooking && (
               <div className="flex flex-col">
@@ -288,15 +371,50 @@ export function BookingTable({
                         )}
                     </div>
 
-                    <div className="space-y-4 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                     <div className="space-y-4 bg-slate-50 p-6 rounded-3xl border border-slate-100">
                         <div className="flex justify-between items-center text-xs">
                             <span className="font-bold text-slate-400 uppercase tracking-widest text-[9px]">Jaminan (Deposit)</span>
                             <span className="font-black text-slate-900 italic">Rp {Number(selectedBooking.locked_deposit_amount).toLocaleString('id-ID')}</span>
                         </div>
-                        {selectedBooking.total_fine > 0 && (
-                           <div className="flex justify-between items-center text-xs text-rose-600 pt-2 border-t border-slate-200">
-                               <span className="font-bold uppercase tracking-widest text-[9px]">Total Denda</span>
-                               <span className="font-black italic">Rp {Number(selectedBooking.total_fine).toLocaleString('id-ID')}</span>
+                        
+                        {(Number(selectedBooking.total_fine) > 0) && (
+                           <div className="pt-4 border-t border-slate-200 space-y-3">
+                              <div className="flex justify-between items-center text-xs text-rose-600">
+                                 <span className="font-bold uppercase tracking-widest text-[9px]">Total Denda {selectedBooking.status === 'Completed' ? '(Lunas)' : ''}</span>
+                                 <span className="font-black italic">Rp {Number(selectedBooking.total_fine).toLocaleString('id-ID')}</span>
+                              </div>
+                              
+                              {selectedBooking.damage_description && (
+                                 <div className="mt-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                                    <p className="text-[9px] text-slate-500 italic leading-relaxed">
+                                       <span className="font-black uppercase not-italic text-slate-400 block mb-1">Catatan Admin:</span> 
+                                       {selectedBooking.damage_description}
+                                    </p>
+                                    {selectedBooking.damage_proof_image && (
+                                       <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white">
+                                          <img 
+                                             src={`http://127.0.0.1:8000/storage/${selectedBooking.damage_proof_image}`} 
+                                             className="w-full h-32 object-cover cursor-pointer hover:scale-105 transition-transform"
+                                             alt="Damage Proof"
+                                             onClick={() => window.open(`http://127.0.0.1:8000/storage/${selectedBooking.damage_proof_image}`, '_blank')}
+                                          />
+                                        </div>
+                                    )}
+                                 </div>
+                              )}
+
+                              {selectedBooking.status !== 'Completed' && (
+                                 <div className="flex justify-between items-center p-3 bg-emerald-500 rounded-2xl text-white shadow-lg shadow-emerald-500/20">
+                                    <span className="font-bold uppercase tracking-widest text-[8px]">Sisa Refund</span>
+                                    <span className="font-black italic text-sm">Rp {Math.max(0, Number(selectedBooking.locked_deposit_amount) - Number(selectedBooking.total_fine)).toLocaleString('id-ID')}</span>
+                                 </div>
+                              )}
+                           </div>
+                        )}
+
+                        {!selectedBooking.returned_at && selectedBooking.status === 'Returned' && (
+                           <div className="pt-4 border-t border-slate-200 text-center">
+                              <p className="text-[10px] font-bold text-amber-600 italic">Admin sedang mengecek kondisi kostum. Mohon tunggu kalkulasi denda.</p>
                            </div>
                         )}
                     </div>
@@ -425,6 +543,86 @@ export function BookingTable({
             </form>
           </div>
         </DialogContent>
+      </Dialog>
+
+      {/* Fine Settlement Modal */}
+      <Dialog open={fineModalOpen} onOpenChange={(open) => {
+          setFineModalOpen(open);
+          if(!open) setSelectedBooking(null);
+      }}>
+          <DialogContent className="sm:max-w-[450px] rounded-[3rem] p-0 overflow-hidden border-none shadow-2xl">
+              <div className="bg-rose-600 p-8 text-white">
+                  <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-white/20 rounded-2xl">
+                          <Icons.AlertCircle className="h-6 w-6" />
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-white hover:bg-white/10" onClick={() => setFineModalOpen(false)}>
+                          <Icons.X className="h-4 w-4" />
+                      </Button>
+                  </div>
+                  <h2 className="text-2xl font-black italic uppercase tracking-tight mb-1">Penyelesaian Denda</h2>
+                  <p className="text-white/80 text-xs font-medium italic">Harap tinjau denda sebelum melakukan pelunasan.</p>
+              </div>
+
+              {selectedBooking && (
+                  <div className="p-8 space-y-8 bg-white">
+                      <div className="space-y-4">
+                          <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-slate-400 uppercase tracking-widest text-[9px]">Jaminan (Deposit)</span>
+                              <span className="font-black text-slate-900">Rp {Number(selectedBooking.locked_deposit_amount).toLocaleString('id-ID')}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs text-rose-600">
+                              <span className="font-bold uppercase tracking-widest text-[9px]">Total Denda Keseluruhan</span>
+                              <span className="font-black italic">Rp {Number(selectedBooking.total_fine).toLocaleString('id-ID')}</span>
+                          </div>
+                          <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">Sisa yang harus dibayar</span>
+                              <span className="text-xl font-black italic text-rose-600">
+                                  Rp {(Number(selectedBooking.total_fine) - Number(selectedBooking.locked_deposit_amount)).toLocaleString('id-ID')}
+                              </span>
+                          </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                          <div className="space-y-1">
+                              <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Catatan Admin</p>
+                              <p className="text-xs font-medium text-slate-700 italic leading-relaxed">
+                                  {selectedBooking.damage_description || "Tidak ada catatan tambahan."}
+                              </p>
+                          </div>
+                          {selectedBooking.damage_proof_image && (
+                              <div className="space-y-2">
+                                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Bukti Foto Kerusakan</p>
+                                  <div className="rounded-2xl overflow-hidden border-2 border-white shadow-md">
+                                      <img 
+                                          src={`http://127.0.0.1:8000/storage/${selectedBooking.damage_proof_image}`} 
+                                          className="w-full h-48 object-cover hover:scale-105 transition-transform duration-500 cursor-pointer" 
+                                          alt="Proof"
+                                          onClick={() => window.open(`http://127.0.0.1:8000/storage/${selectedBooking.damage_proof_image}`, '_blank')}
+                                      />
+                                  </div>
+                                  <p className="text-[8px] text-slate-400 italic text-center">Klik gambar untuk memperbesar</p>
+                              </div>
+                          )}
+                      </div>
+
+                      <Button 
+                          className="w-full h-14 rounded-[1.5rem] bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-[0.2em] italic text-xs shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+                          onClick={() => {
+                              fetcher.submit(
+                                  { intent: 'pay_fine', booking_id: selectedBooking.id },
+                                  { method: 'post' }
+                              );
+                              setFineModalOpen(false);
+                          }}
+                          disabled={fetcher.state !== 'idle'}
+                      >
+                          <Icons.CreditCard className="h-4 w-4" />
+                          Bayar Sekarang via Midtrans
+                      </Button>
+                  </div>
+              )}
+          </DialogContent>
       </Dialog>
     </div>
   );
