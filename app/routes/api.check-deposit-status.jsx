@@ -1,5 +1,6 @@
 import { json } from "@remix-run/node";
 import { getSession } from "~/lib/session.server";
+import { getApiClient } from "~/lib/api";
 
 export const loader = async ({ request }) => {
   const session = await getSession(request);
@@ -17,16 +18,10 @@ export const loader = async ({ request }) => {
   }
 
   try {
-    const response = await fetch(`http://127.0.0.1:8000/api/deposit/transactions/${id}`, {
-      headers: {
-        "Accept": "application/json",
-        "Authorization": `Bearer ${token}`
-      }
-    });
-
-    const data = await response.json();
-    return json(data);
+    const response = await getApiClient(token).get(`/deposit/transactions/${id}`);
+    return json(response.data);
   } catch (error) {
+    console.error("Check Deposit Status Error:", error);
     return json({ error: "Server Error" }, { status: 500 });
   }
 };

@@ -22,9 +22,11 @@ export function TrendingGrid({ costumes = [] }) {
         {displayCostumes.map((outfit) => {
           const imageUrl = outfit.image?.startsWith('http') 
             ? outfit.image 
-            : outfit.images?.[0]?.image_url 
-              ? `http://127.0.0.1:8000/storage/${outfit.images[0].image_url}`
+            : outfit.images?.[0]?.image_path 
+              ? `http://127.0.0.1:8000/storage/${outfit.images[0].image_path}`
               : outfit.image || "/placeholder-costume.jpg";
+
+          const price = outfit.rental_price || outfit.price || 0;
 
           return (
             <div key={outfit.id} className="group flex flex-col gap-4 bg-white p-4 rounded-[2rem] border border-transparent hover:border-primary/20 transition-all hover:shadow-xl">
@@ -40,9 +42,9 @@ export function TrendingGrid({ costumes = [] }) {
               </div>
               <div className="px-2 flex flex-col gap-1 text-left">
                 <h3 className="font-bold text-lg line-clamp-1">{outfit.name}</h3>
-                <p className="text-primary font-black">Rp {(Number(outfit.price) || 0).toLocaleString('id-ID')}</p>
+                <p className="text-primary font-black">Rp {Number(price).toLocaleString('id-ID')}</p>
               </div>
-              <Link to={`/catalog/${outfit.slug}`} className="w-full">
+              <Link to={`/catalog/${outfit.slug || outfit.id}`} className="w-full">
                 <Button className="w-full h-11 rounded-xl font-bold bg-muted text-foreground hover:bg-primary hover:text-white transition-all active:scale-95 shadow-none hover:shadow-lg hover:shadow-primary/20">
                   View Detail
                 </Button>

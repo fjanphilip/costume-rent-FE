@@ -49,7 +49,7 @@ export function Sidebar() {
         <div className="mt-8">
           <p className="px-3 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">System</p>
           <Link
-            to="/settings"
+            to="/dashboard/settings"
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all"
           >
             {Icons.Settings && <Icons.Settings className="h-5 w-5 text-gray-500" />}

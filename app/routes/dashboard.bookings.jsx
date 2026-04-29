@@ -4,6 +4,8 @@ import { getSession } from "~/lib/session.server";
 import { BookingTable } from "~/features/user-dashboard/components/BookingTable";
 import * as Icons from "lucide-react";
 
+import { getApiClient } from "~/lib/api";
+
 export const loader = async ({ request }) => {
   const session = await getSession(request);
   const token = session.get("token");
@@ -13,20 +15,17 @@ export const loader = async ({ request }) => {
   if (!token) return json({ bookings: [], accessories: [] });
 
   try {
-    const headers = {
-      "Accept": "application/json",
-      "Authorization": `Bearer ${token}`
-    };
+    const client = getApiClient(token);
 
     const [bookingsRes, accessoriesRes] = await Promise.all([
-      fetch(`http://127.0.0.1:8000/api/bookings?page=${page}`, { headers }),
-      fetch("http://127.0.0.1:8000/api/accessories", { headers }),
+      client.get(`/bookings?page=${page}`),
+      client.get("/accessories"),
     ]);
 
-    const bookingsData = bookingsRes.ok ? await bookingsRes.json() : { data: [] };
-    const accessoriesData = accessoriesRes.ok ? await accessoriesRes.json() : { data: [] };
+    const bookingsData = bookingsRes.data;
+    const accessoriesData = accessoriesRes.data;
 
-    return json({ 
+    return json({
       bookings: bookingsData.data || [],
       accessories: accessoriesData.data || [],
       pagination: {
@@ -47,78 +46,38 @@ export const action = async ({ request }) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  // Reusing actions from dashboard index
-  if (intent === "confirm_received") {
-    const bookingId = formData.get("booking_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/confirm-received`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      if (response.ok) return json({ success: true });
-    } catch (error) { }
-    return json({ success: true });
-  }
+  const client = getApiClient(token);
 
-  if (intent === "request_return") {
-    const bookingId = formData.get("booking_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/request-return`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: formData 
-      });
-      if (response.ok) return json({ success: true });
-      const resData = await response.json();
-      return json({ error: resData.message }, { status: 400 });
-    } catch (error) {
-      return json({ error: "Network error" }, { status: 500 });
+  try {
+    if (intent === "confirm_received") {
+      const bookingId = formData.get("booking_id");
+      await client.post(`/bookings/${bookingId}/confirm-received`);
+      return json({ success: true });
     }
-  }
 
-  if (intent === "get_payment_token") {
-    const bookingId = formData.get("booking_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/payment-token`, {
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
+    if (intent === "request_return") {
+      const bookingId = formData.get("booking_id");
+      await client.post(`/bookings/${bookingId}/request-return`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
       });
-      const data = await response.json();
-      if (response.ok) {
-        return json({ success: true, snap_token: data.snap_token });
-      }
-      return json({ error: data.message }, { status: 400 });
-    } catch (error) {
-      return json({ error: "Gagal menghubungi server." }, { status: 500 });
+      return json({ success: true });
     }
-  }
 
-  if (intent === "pay_fine") {
-    const bookingId = formData.get("booking_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/pay-fine`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      const data = await response.json();
-      if (response.ok) {
-        return json({ success: true, snap_token: data.snap_token });
-      }
-      return json({ error: data.message }, { status: 400 });
-    } catch (error) {
-      return json({ error: "Gagal menghubungi server." }, { status: 500 });
+    if (intent === "get_payment_token") {
+      const bookingId = formData.get("booking_id");
+      const response = await client.get(`/bookings/${bookingId}/payment-token`);
+      return json({ success: true, snap_token: response.data.snap_token });
     }
+
+    if (intent === "pay_fine") {
+      const bookingId = formData.get("booking_id");
+      const response = await client.post(`/bookings/${bookingId}/pay-fine`);
+      return json({ success: true, snap_token: response.data.snap_token });
+    }
+  } catch (error) {
+    console.error("Dashboard Bookings Action Error:", error);
+    const result = error.response?.data || {};
+    return json({ error: result.message || "Gagal memproses permintaan." }, { status: error.response?.status || 500 });
   }
 
   return null;
@@ -143,13 +102,13 @@ export default function BookingsPage() {
       </header>
 
       <div className="space-y-10">
-        <BookingTable 
-          bookings={bookings} 
-          title="All Transactions" 
-          showViewAll={false} 
-          accessories={accessories} 
+        <BookingTable
+          bookings={bookings}
+          title="All Transactions"
+          showViewAll={false}
+          accessories={accessories}
         />
-        
+
         {/* Simple Pagination */}
         {pagination && pagination.last_page > 1 && (
           <div className="flex justify-center gap-2 pb-10">
@@ -157,11 +116,10 @@ export default function BookingsPage() {
               <button
                 key={page}
                 onClick={() => handlePageChange(page)}
-                className={`h-10 w-10 rounded-xl font-black transition-all ${
-                  pagination.current_page === page
+                className={`h-10 w-10 rounded-xl font-black transition-all ${pagination.current_page === page
                     ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20"
                     : "bg-white text-slate-400 hover:bg-slate-50 border border-slate-100"
-                }`}
+                  }`}
               >
                 {page}
               </button>

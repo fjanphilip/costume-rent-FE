@@ -1,6 +1,7 @@
 import { useOutletContext, useLoaderData, useFetcher, Link } from "@remix-run/react";
 import { json } from "@remix-run/node";
 import { getSession } from "~/lib/session.server";
+import { getApiClient } from "~/lib/api";
 import { useState, useRef } from "react";
 import * as Icons from "lucide-react";
 import { Card, CardContent } from "~/components/ui/card";
@@ -14,23 +15,16 @@ export const loader = async ({ request }) => {
   if (!token) return json({ bookings: [], accessories: [] });
 
   try {
-    const headers = {
-      "Accept": "application/json",
-      "Authorization": `Bearer ${token}`
-    };
-
+    const client = getApiClient(token);
     // Parallel fetch for bookings, accessories
     const [bookingsRes, accessoriesRes] = await Promise.all([
-      fetch("http://127.0.0.1:8000/api/bookings", { headers }),
-      fetch("http://127.0.0.1:8000/api/accessories", { headers }),
+      client.get("/bookings"),
+      client.get("/accessories"),
     ]);
 
-    const bookingsData = bookingsRes.ok ? await bookingsRes.json() : { data: [] };
-    const accessoriesData = accessoriesRes.ok ? await accessoriesRes.json() : { data: [] };
-
-    return json({ 
-      bookings: bookingsData.data || [],
-      accessories: accessoriesData.data || [],
+    return json({
+      bookings: bookingsRes.data.data || [],
+      accessories: accessoriesRes.data.data || [],
     });
   } catch (error) {
     console.error("Dashboard Overview Loader Error:", error);
@@ -44,141 +38,63 @@ export const action = async ({ request }) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  if (intent === "request_verification") {
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/user/profile", {
-        method: "PUT",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          verification_status: "pending"
-        })
-      });
+  const client = getApiClient(token);
 
-      if (response.ok) {
-        return json({ success: true });
-      }
-    } catch (error) {
-      console.error("Verification Request Error:", error);
+  try {
+    if (intent === "request_verification") {
+      await client.put("/user/profile", { verification_status: "pending" });
+      return json({ success: true });
     }
-    return json({ success: true });
-  }
 
-  if (intent === "add_accessory") {
-    const bookingId = formData.get("booking_id");
-    const accessoryId = formData.get("accessory_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/accessories`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ accessory_id: accessoryId })
-      });
-      if (response.ok) return json({ success: true });
-      const resData = await response.json();
-      return json({ error: resData.message }, { status: 400 });
-    } catch (error) {
-      return json({ error: "Network error" }, { status: 500 });
+    if (intent === "add_accessory") {
+      const bookingId = formData.get("booking_id");
+      const accessoryId = formData.get("accessory_id");
+      await client.post(`/bookings/${bookingId}/accessories`, { accessory_ids: [accessoryId] });
+      return json({ success: true });
     }
-  }
 
-  if (intent === "remove_accessory") {
-    const bookingId = formData.get("booking_id");
-    const accessoryId = formData.get("accessory_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/accessories/${accessoryId}`, {
-        method: "DELETE",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      if (response.ok) return json({ success: true });
-    } catch (error) { }
-    return json({ success: true });
-  }
-
-  if (intent === "confirm_received") {
-    const bookingId = formData.get("booking_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/confirm-received`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      if (response.ok) return json({ success: true });
-    } catch (error) { }
-    return json({ success: true });
-  }
-
-  if (intent === "request_return") {
-    const bookingId = formData.get("booking_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/request-return`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: formData // Forwarding the multipart/form-data
-      });
-      if (response.ok) return json({ success: true });
-      const resData = await response.json();
-      return json({ error: resData.message }, { status: 400 });
-    } catch (error) {
-      return json({ error: "Network error" }, { status: 500 });
+    if (intent === "remove_accessory") {
+      const bookingId = formData.get("booking_id");
+      const accessoryId = formData.get("accessory_id");
+      await client.delete(`/bookings/${bookingId}/accessories/${accessoryId}`);
+      return json({ success: true });
     }
-  }
 
-  if (intent === "get_payment_token") {
-    const bookingId = formData.get("booking_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/payment-token`, {
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      const data = await response.json();
-      if (response.ok) {
-        return json({ success: true, snap_token: data.snap_token });
-      }
-      return json({ error: data.message }, { status: 400 });
-    } catch (error) {
-      return json({ error: "Gagal menghubungi server." }, { status: 500 });
+    if (intent === "confirm_received") {
+      const bookingId = formData.get("booking_id");
+      await client.post(`/bookings/${bookingId}/confirm-received`);
+      return json({ success: true });
     }
-  }
 
-  if (intent === "pay_fine") {
-    const bookingId = formData.get("booking_id");
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/bookings/${bookingId}/pay-fine`, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
+    if (intent === "request_return") {
+      const bookingId = formData.get("booking_id");
+      // Note: formData should be sent as multipart/form-data for files
+      await client.post(`/bookings/${bookingId}/request-return`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
       });
-      const data = await response.json();
-      if (response.ok) {
-        return json({ success: true, snap_token: data.snap_token });
-      }
-      return json({ error: data.message }, { status: 400 });
-    } catch (error) {
-      return json({ error: "Gagal menghubungi server." }, { status: 500 });
+      return json({ success: true });
     }
+
+    if (intent === "get_payment_token") {
+      const bookingId = formData.get("booking_id");
+      const response = await client.get(`/bookings/${bookingId}/payment-token`);
+      return json({ success: true, snap_token: response.data.snap_token });
+    }
+
+    if (intent === "pay_fine") {
+      const bookingId = formData.get("booking_id");
+      const response = await client.post(`/bookings/${bookingId}/pay-fine`);
+      return json({ success: true, snap_token: response.data.snap_token });
+    }
+  } catch (error) {
+    console.error("Dashboard Action Error:", error);
+    const result = error.response?.data || {};
+    return json({ error: result.message || "Gagal memproses permintaan." }, { status: error.response?.status || 500 });
   }
 
   return null;
 };
+
 
 export default function DashboardOverview() {
   const { user } = useOutletContext();
@@ -191,7 +107,7 @@ export default function DashboardOverview() {
   const currentStatus = user.is_verified ? 'verified' : (user.verification_status || 'unverified');
 
   // Stats calculation
-  const activeRentalsCount = bookings.filter(b => 
+  const activeRentalsCount = bookings.filter(b =>
     ['Paid', 'Preparing', 'Rented', 'Pending_Payment'].includes(b.status)
   ).length;
 
@@ -214,17 +130,17 @@ export default function DashboardOverview() {
         const diffHours = (end - now) / (1000 * 60 * 60);
         return diffHours > 0 && diffHours <= 24;
       }) && (
-        <div className="bg-rose-500 text-white p-4 rounded-2xl flex items-center gap-4 animate-bounce shadow-lg shadow-rose-500/20">
-          <Icons.AlertTriangle className="h-6 w-6 shrink-0" />
-          <div className="flex-1">
-            <p className="text-xs font-black uppercase tracking-widest">Peringatan Masa Sewa</p>
-            <p className="text-[10px] font-bold opacity-80 italic">Ada kostum yang masa sewanya akan habis dalam kurang dari 24 jam. Harap ajukan pengembalian tepat waktu.</p>
+          <div className="bg-rose-500 text-white p-4 rounded-2xl flex items-center gap-4 animate-bounce shadow-lg shadow-rose-500/20">
+            <Icons.AlertTriangle className="h-6 w-6 shrink-0" />
+            <div className="flex-1">
+              <p className="text-xs font-black uppercase tracking-widest">Peringatan Masa Sewa</p>
+              <p className="text-[10px] font-bold opacity-80 italic">Ada kostum yang masa sewanya akan habis dalam kurang dari 24 jam. Harap ajukan pengembalian tepat waktu.</p>
+            </div>
+            <Link to="/dashboard/bookings">
+              <Button size="sm" variant="ghost" className="text-white border border-white/20 hover:bg-white/10 font-black uppercase text-[9px] tracking-widest rounded-xl">Cek Booking</Button>
+            </Link>
           </div>
-          <Link to="/dashboard/bookings">
-            <Button size="sm" variant="ghost" className="text-white border border-white/20 hover:bg-white/10 font-black uppercase text-[9px] tracking-widest rounded-xl">Cek Booking</Button>
-          </Link>
-        </div>
-      )}
+        )}
 
       <header className="flex flex-col gap-1 text-left">
         <h1 className="text-2xl sm:text-3xl font-black tracking-tight italic leading-tight">Halo, {userName}! 👋</h1>

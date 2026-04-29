@@ -10,7 +10,7 @@ import { Badge } from "~/components/ui/badge";
 import { format } from "date-fns";
 
 export default function CheckoutFeature() {
-   const { user, costume, bookedDates: initialBookedDates, initialStartDate, initialEndDate } = useLoaderData();
+   const { user, costume, addresses, bookedDates: initialBookedDates, initialStartDate, initialEndDate } = useLoaderData();
    const actionData = useActionData();
    const navigate = useNavigate();
    const navigation = useNavigation();
@@ -39,6 +39,15 @@ export default function CheckoutFeature() {
       }
    };
    const [notes, setNotes] = useState("");
+   const [selectedAccessories, setSelectedAccessories] = useState([]);
+
+   const toggleAccessory = (accId) => {
+      setSelectedAccessories(prev => 
+         prev.includes(accId) 
+            ? prev.filter(id => id !== accId) 
+            : [...prev, accId]
+      );
+   };
 
    // Convert booked dates strings to Date objects
    const bookedDates = useMemo(() => {
@@ -104,7 +113,15 @@ export default function CheckoutFeature() {
    const days = calculateDays();
    const totalPrice = costume.rental_price * days;
    const deposit = costume.required_deposit;
-   const grandTotal = totalPrice + deposit;
+   
+   const accessoriesTotal = useMemo(() => {
+      if (!costume.accessories) return 0;
+      return costume.accessories
+         .filter(acc => selectedAccessories.includes(acc.id))
+         .reduce((sum, acc) => sum + acc.rental_price, 0);
+   }, [costume.accessories, selectedAccessories]);
+
+   const grandTotal = totalPrice + deposit + accessoriesTotal;
 
    const isVerified = user.is_verified == 1 || user.is_verified === true || user.is_verified === "1";
 
@@ -225,6 +242,61 @@ export default function CheckoutFeature() {
                               className="w-full min-h-[100px] p-4 rounded-3xl bg-slate-50 border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-slate-900 outline-none transition-all resize-none"
                            />
                         </div>
+                        
+                        {/* Accessories Selection */}
+                        <div className="space-y-6">
+                           <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                 <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
+                                    <Icons.PlusSquare className="h-5 w-5" />
+                                 </div>
+                                 <h3 className="text-lg font-black italic uppercase tracking-tight">Tambah Aksesoris</h3>
+                              </div>
+                              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest border-slate-200">{costume.accessories?.length || 0} Opsi</Badge>
+                           </div>
+
+                           <div className="grid grid-cols-1 gap-3">
+                              {costume.accessories && costume.accessories.length > 0 ? (
+                                 costume.accessories.map((acc) => (
+                                    <div 
+                                       key={acc.id}
+                                       onClick={() => toggleAccessory(acc.id)}
+                                       className={`group p-4 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between ${
+                                          selectedAccessories.includes(acc.id)
+                                             ? 'bg-primary/5 border-primary shadow-lg shadow-primary/10'
+                                             : 'bg-white border-slate-100 hover:border-slate-200'
+                                       }`}
+                                    >
+                                       <div className="flex items-center gap-4">
+                                          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all ${
+                                             selectedAccessories.includes(acc.id) ? 'bg-primary text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-100'
+                                          }`}>
+                                             <Icons.Gem className="h-5 w-5" />
+                                          </div>
+                                          <div className="text-left">
+                                             <p className={`text-sm font-black italic uppercase tracking-tight ${selectedAccessories.includes(acc.id) ? 'text-primary' : 'text-slate-700'}`}>{acc.name}</p>
+                                             <p className="text-[10px] font-bold text-slate-400 italic capitalize">{acc.category || 'Aksesoris'}</p>
+                                          </div>
+                                       </div>
+                                       <div className="text-right flex flex-col items-end gap-1">
+                                          <p className={`text-sm font-black italic ${selectedAccessories.includes(acc.id) ? 'text-primary' : 'text-slate-900'}`}>+ Rp {acc.rental_price.toLocaleString('id-ID')}</p>
+                                          {selectedAccessories.includes(acc.id) && (
+                                             <div className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-emerald-500 animate-in zoom-in-95">
+                                                <Icons.CheckCircle2 className="h-2 w-2" />
+                                                Ditambahkan
+                                             </div>
+                                          )}
+                                       </div>
+                                    </div>
+                                 ))
+                              ) : (
+                                 <div className="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-200 text-center">
+                                    <Icons.Inbox className="h-8 w-8 text-slate-300 mx-auto mb-3" />
+                                    <p className="text-xs font-bold text-slate-400 italic">Tidak ada aksesoris tambahan untuk kostum ini.</p>
+                                 </div>
+                              )}
+                           </div>
+                        </div>
 
                         {/* Shipping Info */}
                         <div className="space-y-6">
@@ -235,13 +307,32 @@ export default function CheckoutFeature() {
                                  </div>
                                  <h3 className="text-lg font-black italic uppercase tracking-tight">Lokasi Pengiriman</h3>
                               </div>
-                              <button className="text-[10px] font-black uppercase text-primary tracking-widest hover:underline transition-all">Ubah</button>
+                              <Link to="/dashboard/settings" className="text-[10px] font-black uppercase text-primary tracking-widest hover:underline transition-all">Kelola Alamat</Link>
                            </div>
                            <div className="p-6 rounded-3xl bg-slate-50/50 border border-slate-100">
-                              <p className="text-sm font-black text-slate-800 mb-1">{user.name}</p>
-                              <p className="text-xs font-semibold text-slate-500 leading-relaxed italic line-clamp-2">
-                                 Griya Shanta Blok G-122, Lowokwaru, Kota Malang, Jawa Timur, 65145.
-                              </p>
+                              {addresses && addresses.find(a => a.is_primary) ? (
+                                 (() => {
+                                    const primary = addresses.find(a => a.is_primary);
+                                    return (
+                                       <>
+                                          <p className="text-sm font-black text-slate-800 mb-1">{primary.receiver_name} <span className="text-[10px] text-slate-400 font-bold ml-2">({primary.label})</span></p>
+                                          <p className="text-xs font-semibold text-slate-500 leading-relaxed italic line-clamp-2">
+                                             {primary.detail_address}, {primary.village_name}, {primary.district_name}, {primary.city_name}, {primary.province_name} {primary.postal_code}.
+                                          </p>
+                                          <p className="text-[10px] font-bold text-slate-400 mt-2 italic">{primary.phone_number}</p>
+                                       </>
+                                    );
+                                 })()
+                              ) : (
+                                 <div className="text-center py-4">
+                                    <p className="text-xs font-black text-rose-500 italic mb-3">Anda belum mengatur alamat utama.</p>
+                                    <Link to="/dashboard/settings">
+                                       <Button variant="outline" size="sm" className="h-8 rounded-xl text-[9px] font-black uppercase tracking-widest border-rose-200 text-rose-500 hover:bg-rose-50">
+                                          Atur Alamat Sekarang
+                                       </Button>
+                                    </Link>
+                                 </div>
+                              )}
                            </div>
                         </div>
                      </div>
@@ -263,6 +354,12 @@ export default function CheckoutFeature() {
                                  <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic">Jaminan (Deposit)</span>
                                  <span className="text-lg font-black italic text-slate-800">Rp {deposit.toLocaleString('id-ID')}</span>
                               </div>
+                              {accessoriesTotal > 0 && (
+                                 <div className="flex justify-between items-center text-primary animate-in slide-in-from-right-4">
+                                    <span className="text-[11px] font-black uppercase tracking-widest italic">Aksesoris Tambahan</span>
+                                    <span className="text-lg font-black italic">+ Rp {accessoriesTotal.toLocaleString('id-ID')}</span>
+                                 </div>
+                              )}
                               <div className="flex justify-between items-center">
                                  <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic">Pembayaran</span>
                                  <Badge className="bg-blue-600 text-white border-none px-3 py-1 text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
@@ -293,6 +390,18 @@ export default function CheckoutFeature() {
                               <input type="hidden" name="end_date" value={date?.to ? format(date.to, "yyyy-MM-dd") : ""} />
                               <input type="hidden" name="duration_days" value={days} />
                               <input type="hidden" name="notes" value={notes} />
+                              <input 
+                                 type="hidden" 
+                                 name="shipping_address" 
+                                 value={(() => {
+                                    const p = addresses?.find(a => a.is_primary);
+                                    if (!p) return "";
+                                    return `${p.receiver_name} | ${p.phone_number} | ${p.detail_address}, ${p.village_name}, ${p.district_name}, ${p.city_name}, ${p.province_name} ${p.postal_code}`;
+                                 })()} 
+                              />
+                               {selectedAccessories.map(id => (
+                                  <input key={id} type="hidden" name="accessory_ids" value={id} />
+                               ))}
 
                               {showManualPay && actionData?.snap_token && (
                                  <Button

@@ -1,6 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData, Outlet } from "@remix-run/react";
 import { getSession } from "~/lib/session.server";
+import { getApiClient } from "~/lib/api";
 import { UserSidebar } from "~/features/user-dashboard/components/UserSidebar";
 
 export const loader = async ({ request }) => {
@@ -14,17 +15,8 @@ export const loader = async ({ request }) => {
   }
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/user", {
-      headers: {
-        "Accept": "application/json",
-        "Authorization": `Bearer ${token}`
-      }
-    });
-
-    if (response.ok) {
-      const freshUser = await response.json();
-      return json({ user: freshUser });
-    }
+    const response = await getApiClient(token).get("/user");
+    return json({ user: response.data.user || response.data });
   } catch (error) {
     console.error("Dashboard Loader Error:", error);
   }

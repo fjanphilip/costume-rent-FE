@@ -1,5 +1,6 @@
 import { json } from "@remix-run/node";
 import { getSession } from "~/lib/session.server";
+import { getApiClient, api } from "~/lib/api";
 import CostumeDetailFeature from "~/features/costume-detail";
 
 export const loader = async ({ params, request }) => {
@@ -9,32 +10,22 @@ export const loader = async ({ params, request }) => {
   const { slug } = params;
 
   try {
-    const headers = { "Accept": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const client = token ? getApiClient(token) : api;
 
-    const response = await fetch(`http://127.0.0.1:8000/api/costumes/${slug}`, {
-      headers
-    });
-    
-    if (!response.ok) {
-        throw new Response("Costume not found", { status: 404 });
-    }
-
-    const costume = await response.json();
+    const response = await client.get(`/costumes/${slug}`);
+    const costume = response.data;
 
     // Fetch Booked Dates for this costume
-    const bookedDatesRes = await fetch(`http://127.0.0.1:8000/api/costumes/${costume.id}/booked-dates`, {
-      headers
-    });
-    let bookedDates = [];
-    if (bookedDatesRes.ok) {
-       const bookedData = await bookedDatesRes.json();
-       bookedDates = Array.isArray(bookedData) ? bookedData : (bookedData.booked_dates || bookedData.data || []);
-    }
+    const bookedDatesRes = await client.get(`/costumes/${costume.id}/booked-dates`);
+    const bookedData = bookedDatesRes.data;
+    const bookedDates = Array.isArray(bookedData) ? bookedData : (bookedData.booked_dates || bookedData.data || []);
 
     return json({ user, costume, bookedDates });
   } catch (error) {
     console.error("Fetch Detail Error:", error);
+    if (error.response?.status === 404) {
+      throw new Response("Costume not found", { status: 404 });
+    }
     throw new Response("Error fetching costume details", { status: 500 });
   }
 };

@@ -1,6 +1,7 @@
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { getSession } from "~/lib/session.server";
+import api from "~/lib/api";
 export { default } from "~/features/home-catalog";
 
 export const loader = async ({ request }) => {
@@ -8,10 +9,8 @@ export const loader = async ({ request }) => {
   const user = session.get("user");
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/costumes?limit=6", {
-      headers: { "Accept": "application/json" }
-    });
-    const result = await response.json();
+    const response = await api.get("/costumes?per_page=6&sort_by=trending");
+    const result = response.data;
     return json({ 
       user, 
       costumes: result.data || result.costumes || [] 

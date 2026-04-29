@@ -1,6 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { getSession } from "~/lib/session.server";
+import { getApiClient } from "~/lib/api";
 import AdminWithdrawalsFeature from "~/features/admin-withdrawals";
 import { AdminSidebar } from "~/features/admin-dashboard/components/AdminSidebar";
 
@@ -15,15 +16,8 @@ export const loader = async ({ request }) => {
   }
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/admin/deposit-transactions?type=Withdraw", {
-      headers: {
-        "Accept": "application/json",
-        "Authorization": `Bearer ${token}`
-      }
-    });
-
-    const result = await response.json();
-    return json({ transactions: result.data || [] });
+    const response = await getApiClient(token).get("/admin/deposit-transactions?type=Withdraw");
+    return json({ transactions: response.data.data || [] });
   } catch (error) {
     console.error("Fetch Withdrawals Error:", error);
     return json({ transactions: [] });
@@ -34,54 +28,39 @@ export const action = async ({ request }) => {
   const session = await getSession(request);
   const token = session.get("token");
   const formData = await request.formData();
-  
+
   const intent = formData.get("intent");
   const id = formData.get("id");
+
+  const client = getApiClient(token);
 
   if (intent === "status_update") {
     const status = formData.get("status");
     const reason = formData.get("reason");
 
-    console.log(`Updating Status: ID=${id}, Status=${status}, Reason=${reason}`);
-
     try {
       const payload = { status };
       if (reason) payload.reason = reason;
 
-      const response = await fetch(`http://127.0.0.1:8000/api/admin/deposit-transactions/${id}/status`, {
-        method: "PUT",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json();
-      console.log("API Response:", result);
-
-      if (response.ok) {
-        return json({ status: "success", ...result });
-      }
-      
-      return json({ 
-        status: "error", 
-        message: result.message || "Gagal memperbarui status di server." 
-      }, { status: response.status });
-
-    } catch (e) {
-      console.error("Action Error:", e);
-      return json({ status: "error", message: "Terjadi kesalahan koneksi ke server." }, { status: 500 });
+      const response = await client.put(`/admin/deposit-transactions/${id}/status`, payload);
+      return json({ status: "success", ...response.data });
+    } catch (error) {
+      console.error("Action Error:", error);
+      const result = error.response?.data || {};
+      return json({
+        status: "error",
+        message: result.message || "Gagal memperbarui status di server."
+      }, { status: error.response?.status || 500 });
     }
   }
 
   return null;
 };
 
+
 export default function AdminWithdrawalsPage() {
   const { transactions } = useLoaderData();
-  
+
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">
       <AdminSidebar />

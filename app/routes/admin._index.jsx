@@ -1,6 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { getSession } from "~/lib/session.server";
+import { getApiClient } from "~/lib/api";
 import AdminDashboardFeature from "~/features/admin-dashboard";
 
 export const loader = async ({ request }) => {
@@ -19,20 +20,17 @@ export const loader = async ({ request }) => {
   }
 
   try {
-    const headers = { 
-      "Accept": "application/json",
-      "Authorization": `Bearer ${token}`
-    };
+    const client = getApiClient(token);
 
     const [usersRes, txRes, bookingsRes] = await Promise.all([
-      fetch("http://127.0.0.1:8000/api/admin/users", { headers }),
-      fetch("http://127.0.0.1:8000/api/admin/deposit-transactions", { headers }),
-      fetch("http://127.0.0.1:8000/api/admin/bookings", { headers })
+      client.get("/admin/users"),
+      client.get("/admin/deposit-transactions"),
+      client.get("/admin/bookings")
     ]);
 
-    const usersData = await usersRes.json();
-    const txData = await txRes.json();
-    const bookingsData = await bookingsRes.json();
+    const usersData = usersRes.data;
+    const txData = txRes.data;
+    const bookingsData = bookingsRes.data;
 
     return json({ 
       user, 
