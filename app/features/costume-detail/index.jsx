@@ -6,11 +6,15 @@ import { Footer } from "~/components/layout/Footer";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { DatePickerWithRange } from "~/components/ui/date-range-picker";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "~/components/ui/dialog";
 import { format } from "date-fns";
 
 export default function CostumeDetailFeature() {
-  const { costume, user } = useLoaderData();
+  const { costume, user, bookedDates: bookedDatesStrings = [] } = useLoaderData();
   const navigate = useNavigate();
+
+  // Convert booked dates strings to Date objects
+  const bookedDates = bookedDatesStrings.map(d => new Date(d));
   const [selectedImage, setSelectedImage] = useState(
     costume.images?.[0]?.image_path || null
   );
@@ -19,13 +23,23 @@ export default function CostumeDetailFeature() {
     from: undefined,
     to: undefined,
   });
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+
+  const handleOpenChange = (isOpen) => {
+    if (!isOpen && date?.from && date?.to) {
+      const diff = Math.ceil((date.to - date.from) / (1000 * 60 * 60 * 24));
+      if (diff >= 0 && diff < 3) {
+        setIsAlertOpen(true);
+      }
+    }
+  };
 
   const images = costume.images || [];
 
   const calculateDays = () => {
-    if (!date?.from || !date?.to) return 1;
+    if (!date?.from || !date?.to) return 3;
     const diff = Math.ceil((date.to - date.from) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 1;
+    return diff > 0 ? Math.max(diff, 3) : 3;
   };
 
   const days = calculateDays();
@@ -120,41 +134,43 @@ export default function CostumeDetailFeature() {
                   </div>
 
                   <div className="space-y-3">
-                    <DatePickerWithRange 
-                      date={date} 
-                      setDate={setDate} 
+                    <DatePickerWithRange
+                      date={date}
+                      setDate={setDate}
+                      onOpenChange={handleOpenChange}
                       label="Durasi Penyewaan"
+                      bookedDates={bookedDates}
                     />
+                    <p className="text-[10px] text-primary/80 font-bold italic">* Minimal durasi penyewaan adalah 3 hari.</p>
                   </div>
 
                   <div className="pt-6 border-t border-white/10 flex justify-between items-end">
                     <div>
                       <p className="text-[10px] font-black uppercase text-white/40 mb-1">Total Biaya Sewa</p>
-                      <p className="text-3xl font-white text-white italic text-primary">Rp {totalRental.toLocaleString('id-ID')}</p>
+                      <p className="text-3xl font-white text-white italic ">Rp {totalRental.toLocaleString('id-ID')}</p>
                     </div>
-                    <Link 
+                    <Link
                       to={user?.is_verified ? `/checkout?costume_slug=${costume.slug}${date?.from ? `&start_date=${format(date.from, "yyyy-MM-dd")}` : ""}${date?.to ? `&end_date=${format(date.to, "yyyy-MM-dd")}` : ""}` : "/dashboard"}
                       className="inline-block"
                     >
-                       <Button
-                         className={`h-16 px-10 rounded-2xl transition-all text-base group w-full font-black shadow-2xl ${
-                            !user?.is_verified 
-                            ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20' 
+                      <Button
+                        className={`h-16 px-10 rounded-2xl transition-all text-base group w-full font-black shadow-2xl ${!user?.is_verified
+                            ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
                             : 'bg-white hover:bg-primary/90 hover:text-white text-black shadow-primary/20'
-                         }`}
-                       >
-                          {!user?.is_verified ? (
-                             <>
-                                Verifikasi Identitas
-                                <Icons.Lock className="ml-2 h-5 w-5" />
-                             </>
-                          ) : (
-                             <>
-                                Lanjut Detail Sewa
-                                <Icons.ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-2 transition-transform" />
-                             </>
-                          )}
-                       </Button>
+                          }`}
+                      >
+                        {!user?.is_verified ? (
+                          <>
+                            Verifikasi Identitas
+                            <Icons.Lock className="ml-2 h-5 w-5" />
+                          </>
+                        ) : (
+                          <>
+                            Lanjut Detail Sewa
+                            <Icons.ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-2 transition-transform" />
+                          </>
+                        )}
+                      </Button>
                     </Link>
 
                   </div>
@@ -176,9 +192,12 @@ export default function CostumeDetailFeature() {
                       <span className="font-bold text-muted-foreground">Series</span>
                       <span className="font-black text-slate-800">{costume.series}</span>
                     </li>
-                    <li className="flex items-center justify-between text-sm">
-                      <span className="font-bold text-muted-foreground">Deposit</span>
-                      <span className="font-black text-emerald-600">Rp {costume.required_deposit.toLocaleString('id-ID')}</span>
+                    <li className="flex flex-col gap-1 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-muted-foreground">Deposit</span>
+                        <span className="font-black text-emerald-600">Rp {costume.required_deposit.toLocaleString('id-ID')}</span>
+                      </div>
+                      <span className="text-[9px] text-slate-400 italic text-right">* Deposit akan ditotal saat checkout</span>
                     </li>
                   </ul>
                 </div>
@@ -213,6 +232,26 @@ export default function CostumeDetailFeature() {
       </main>
 
       <Footer />
+
+      {/* Date Validation Alert Modal */}
+      <Dialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white rounded-[3rem] border-none shadow-2xl">
+          <div className="p-10 flex flex-col items-center text-center space-y-6">
+            <div className="h-20 w-20 bg-rose-500 rounded-full flex items-center justify-center shadow-lg shadow-rose-200 shrink-0">
+              <Icons.AlertTriangle className="h-10 w-10 text-white" />
+            </div>
+            <div className="space-y-2">
+              <DialogTitle className="text-xl font-bold text-slate-900">Durasi Kurang dari 3 Hari</DialogTitle>
+              <DialogDescription className="text-sm text-slate-500">
+                Peringatan: Minimal durasi penyewaan kostum adalah <strong className="text-slate-900">3 hari</strong>. Sistem akan secara otomatis membulatkan perhitungan biaya untuk 3 hari sewa.
+              </DialogDescription>
+            </div>
+            <Button onClick={() => setIsAlertOpen(false)} className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm">
+              Saya Mengerti
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

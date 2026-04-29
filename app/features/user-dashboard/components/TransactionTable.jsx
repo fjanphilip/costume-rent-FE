@@ -55,49 +55,68 @@ export function TransactionTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {transactions.length > 0 ? transactions.map((tx) => (
-              <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-8 py-6">
-                  <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${
-                      tx.transaction_type === 'Top_Up' ? 'bg-emerald-50 text-emerald-600 shadow-sm shadow-emerald-100' : 'bg-blue-50 text-blue-600 shadow-sm shadow-blue-100'
-                    }`}>
-                      {tx.transaction_type === 'Top_Up' ? <Icons.ArrowUpRight className="h-6 w-6" /> : <Icons.ArrowDownLeft className="h-6 w-6" />}
+            {transactions.length > 0 ? transactions.map((tx) => {
+              const amount = Number(tx.amount) || 0;
+              const isCredit = tx.type === 'Credit';
+              
+              // Map icons based on transaction type
+              let Icon = Icons.ArrowDownLeft;
+              let iconColor = "bg-blue-50 text-blue-600 shadow-blue-100";
+              
+              if (tx.transaction_type === 'Top_Up' || tx.transaction_type === 'Booking_Refund') {
+                Icon = Icons.ArrowUpRight;
+                iconColor = "bg-emerald-50 text-emerald-600 shadow-emerald-100";
+              } else if (tx.transaction_type === 'Withdraw' || tx.transaction_type === 'Fine_Deduction') {
+                Icon = Icons.ArrowDownRight;
+                iconColor = "bg-rose-50 text-rose-600 shadow-rose-100";
+              } else if (tx.transaction_type === 'Booking_Payment') {
+                Icon = Icons.ShoppingBag;
+                iconColor = "bg-indigo-50 text-indigo-600 shadow-indigo-100";
+              }
+
+              return (
+                <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-4">
+                      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-sm ${iconColor}`}>
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                         <span className="font-bold text-sm text-slate-900">{tx.description || tx.transaction_type.replace('_', ' ')}</span>
+                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tx.reference_id}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-0.5">
-                       <span className="font-bold text-sm text-slate-900">{tx.description}</span>
-                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{tx.reference_id}</span>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-8 py-6">
-                   <span className="text-xs font-bold text-slate-500 italic">{formatDate(tx.created_at)}</span>
-                </td>
-                <td className="px-8 py-6">
-                   <span className={`text-base font-black italic ${tx.type === 'Credit' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                     {tx.type === 'Credit' ? '+' : '-'} Rp {tx.amount.toLocaleString('id-ID')}
-                   </span>
-                </td>
-                <td className="px-8 py-6">
-                   <Badge className={`border-none font-black text-[9px] rounded-lg px-3 py-1 tracking-widest shadow-sm ${
-                     tx.status === 'Completed' ? 'bg-emerald-500 text-white' : 
-                     tx.status === 'Pending' ? 'bg-amber-500 text-white' : 'bg-slate-400 text-white'
-                   }`}>
-                     {tx.status.toUpperCase()}
-                   </Badge>
-                </td>
-                <td className="px-8 py-6">
-                   <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="rounded-xl h-10 px-6 font-black uppercase text-[10px] tracking-widest border-2 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all active:scale-95"
-                    onClick={() => setSelectedTx(tx)}
-                   >
-                    Detail
-                   </Button>
-                </td>
-              </tr>
-            )) : (
+                  </td>
+                  <td className="px-8 py-6">
+                     <span className="text-xs font-bold text-slate-500 italic">{formatDate(tx.created_at)}</span>
+                  </td>
+                  <td className="px-8 py-6">
+                     <span className={`text-base font-black italic ${isCredit ? 'text-emerald-600' : 'text-rose-600'}`}>
+                       {isCredit ? '+' : '-'} Rp {amount.toLocaleString('id-ID')}
+                     </span>
+                  </td>
+                  <td className="px-8 py-6">
+                     <Badge className={`border-none font-black text-[9px] rounded-lg px-3 py-1 tracking-widest shadow-sm ${
+                       tx.status === 'Completed' ? 'bg-emerald-500 text-white' : 
+                       tx.status === 'Pending' ? 'bg-amber-500 text-white' : 
+                       tx.status === 'Rejected' ? 'bg-rose-500 text-white' : 'bg-slate-400 text-white'
+                     }`}>
+                       {tx.status.toUpperCase()}
+                     </Badge>
+                  </td>
+                  <td className="px-8 py-6">
+                     <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-xl h-10 px-6 font-black uppercase text-[10px] tracking-widest border-2 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all active:scale-95"
+                      onClick={() => setSelectedTx(tx)}
+                     >
+                      Detail
+                     </Button>
+                  </td>
+                </tr>
+              );
+            }) : (
               <tr>
                 <td colSpan="5" className="px-8 py-20 text-center">
                   <div className="flex flex-col items-center gap-4 opacity-20">

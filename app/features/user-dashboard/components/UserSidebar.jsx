@@ -11,7 +11,7 @@ export function UserSidebar() {
     <aside className="w-64 bg-white border-r flex flex-col h-screen sticky top-0 flex-shrink-0">
       <div className="p-8 pb-4">
         <NavLink to="/" className="flex items-center gap-2">
-           <span className="font-extrabold text-xl tracking-tighter text-primary italic">SewaCosplay</span>
+          <span className="font-extrabold text-xl tracking-tighter text-primary italic">SewaCosplay</span>
         </NavLink>
       </div>
 
@@ -25,8 +25,8 @@ export function UserSidebar() {
               end={item.href === "/dashboard"}
               className={({ isActive }) => `
                 flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-bold transition-all group
-                ${isActive 
-                  ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                ${isActive
+                  ? 'bg-primary text-white shadow-lg shadow-primary/20'
                   : 'text-muted-foreground hover:text-primary hover:bg-primary/5'}
               `}
             >

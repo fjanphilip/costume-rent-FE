@@ -16,12 +16,14 @@ export function DatePickerWithRange({
   className,
   date,
   setDate,
-  label = "Pilih Tanggal Sewa"
+  label = "Pilih Tanggal Sewa",
+  bookedDates = [],
+  onOpenChange
 }) {
   return (
     <Field className={cn("grid gap-2", className)}>
       <FieldLabel>{label}</FieldLabel>
-      <Popover>
+      <Popover onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <Button
             id="date"
@@ -54,7 +56,16 @@ export function DatePickerWithRange({
             selected={date}
             onSelect={setDate}
             numberOfMonths={2}
-            disabled={{ before: new Date() }}
+            disabled={[
+              { before: new Date() },
+              ...bookedDates
+            ]}
+            modifiers={{
+              booked: bookedDates
+            }}
+            modifiersClassNames={{
+              booked: "!bg-rose-50 !text-rose-500 font-bold line-through !opacity-100"
+            }}
           />
         </PopoverContent>
       </Popover>

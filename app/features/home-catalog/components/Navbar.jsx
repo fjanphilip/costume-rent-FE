@@ -69,15 +69,9 @@ export function Navbar({ user }) {
                     <DropdownMenuSeparator className="bg-slate-100" />
 
                     <DropdownMenuItem asChild className="rounded-lg focus:bg-slate-100 cursor-pointer py-2.5 px-3 text-sm text-slate-700">
-                      <Link to="/dashboard" className="flex items-center w-full">
+                      <Link to={user.role === 'admin' ? "/admin" : "/dashboard"} className="flex items-center w-full">
                         <Icons.LayoutDashboard className="mr-3 h-4 w-4" />
-                        Overview
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild className="rounded-lg focus:bg-slate-100 cursor-pointer py-2.5 px-3 text-sm text-slate-700">
-                      <Link to="/dashboard/wallet" className="flex items-center w-full">
-                        <Icons.Wallet className="mr-3 h-4 w-4" />
-                        Wallet
+                        {user.role === 'admin' ? "Admin Panel" : "Overview"}
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className="rounded-lg focus:bg-slate-100 cursor-pointer py-2.5 px-3 text-sm text-slate-700">
