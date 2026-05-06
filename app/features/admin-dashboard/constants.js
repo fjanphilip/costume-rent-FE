@@ -15,6 +15,11 @@ export const ADMIN_MENU = [
     href: "/admin/costumes"
   },
   {
+    label: "Aksesoris",
+    icon: "Gem",
+    href: "/admin/accessories"
+  },
+  {
     label: "Daftar Booking",
     icon: "ShoppingBag",
     href: "/admin/bookings"

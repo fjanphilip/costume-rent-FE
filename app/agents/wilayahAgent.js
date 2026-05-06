@@ -100,6 +100,14 @@ export const WilayahAgent = createAgent({
       });
     },
 
+
+    /**
+     * setCoords: Set manual or automatic coordinates
+     */
+    setCoords: (lat, lng) => {
+      setState({ latitude: lat, longitude: lng });
+    },
+
     /**
      * setRegionData: Pre-fill for editing
      */

@@ -2,17 +2,17 @@ import { useState, useEffect } from "react";
 import * as Icons from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
 } from "~/components/ui/dialog";
 import { Link, useFetcher } from "@remix-run/react";
 
-export function BookingTable({ 
-  bookings = [], 
+export function BookingTable({
+  bookings = [],
   title = "Recent Bookings",
   showViewAll = true,
   accessories = []
@@ -86,28 +86,40 @@ export function BookingTable({
     setSelectedBooking(null);
   };
 
-  // Trigger Midtrans Snap when fetcher returns a token
+  // Handle fetcher responses
   useEffect(() => {
-     if (fetcher.data?.snap_token) {
-        // Tutup semua modal dashboard sebelum membuka Midtrans
-        setSelectedBooking(null);
-        setFineModalOpen(false);
-        setReturnModalOpen(false);
-        
+    if (fetcher.data?.error) {
+      alert("Terjadi Kesalahan: " + fetcher.data.error);
+    } else if (fetcher.data?.success && fetcher.data?.snap_token) {
+      // Tutup semua modal dashboard sebelum membuka Midtrans
+      setSelectedBooking(null);
+      setFineModalOpen(false);
+      setReturnModalOpen(false);
+
+      if (window.snap) {
         window.snap.pay(fetcher.data.snap_token, {
-           onSuccess: () => window.location.reload(),
-           onPending: () => window.location.reload(),
-           onError: () => alert("Pembayaran gagal."),
-           onClose: () => console.log("Snap closed")
+          onSuccess: () => window.location.reload(),
+          onPending: () => window.location.reload(),
+          onError: () => alert("Pembayaran gagal."),
+          onClose: () => console.log("Snap closed")
         });
-     }
+      } else {
+        alert("Sistem pembayaran Midtrans belum siap. Coba muat ulang halaman.");
+      }
+    } else if (fetcher.data?.success && !fetcher.data?.snap_token) {
+       // Operasi lain yang berhasil (misal: submit resi) tanpa snap_token
+       // Kita bisa memberi tahu user (opsional) atau membiarkan UI refresh sendiri
+       if (fetcher.formData?.get('intent') === 'request_return') {
+          alert("Pengajuan pengembalian berhasil dikirim!");
+       }
+    }
   }, [fetcher.data]);
 
   const handlePayment = (bookingId) => {
-     fetcher.submit(
-        { intent: "get_payment_token", booking_id: bookingId },
-        { method: "post" }
-     );
+    fetcher.submit(
+      { intent: "get_payment_token", booking_id: bookingId },
+      { method: "post" }
+    );
   };
 
   return (
@@ -122,7 +134,7 @@ export function BookingTable({
           </Link>
         )}
       </div>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead>
@@ -141,145 +153,153 @@ export function BookingTable({
                 <td className="px-8 py-6">
                   <div className="flex items-center gap-4">
                     <div className="h-14 w-12 rounded-2xl overflow-hidden bg-slate-100 border-2 border-white shadow-sm flex-shrink-0">
-                      <img 
-                        src={booking.costume?.images?.[0] ? `http://127.0.0.1:8000/storage/${booking.costume.images[0].image_path}` : "https://via.placeholder.com/100"} 
+                      <img
+                        src={booking.costume?.images?.[0] ? `${booking.costume.images[0].image_path}` : "https://via.placeholder.com/100"}
                         className="w-full h-full object-cover"
                         alt={booking.costume?.name}
                       />
                     </div>
                     <div className="flex flex-col">
-                       <span className="font-semibold text-sm text-slate-900 line-clamp-1">{booking.costume?.name || "Deleted Costume"}</span>
-                       <span className="text-xs text-slate-500">{booking.booking_code}</span>
+                      <span className="font-semibold text-sm text-slate-900 line-clamp-1">{booking.costume?.name || "Deleted Costume"}</span>
+                      <span className="text-xs text-slate-500">{booking.booking_code}</span>
                     </div>
                   </div>
                 </td>
                 <td className="px-8 py-6">
-                   <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium text-slate-700">{formatDate(booking.start_date)}</span>
-                      <span className="text-xs text-slate-400">sampai {formatDate(booking.end_date)}</span>
-                   </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium text-slate-700">{formatDate(booking.start_date)}</span>
+                    <span className="text-xs text-slate-400">sampai {formatDate(booking.end_date)}</span>
+                  </div>
                 </td>
                 <td className="px-8 py-6">
-                   {booking.tracking_number ? (
-                     <div className="flex items-center gap-2">
-                        <div className="bg-primary/5 border border-primary/10 px-3 py-1.5 rounded-xl flex items-center gap-2">
-                           <Icons.Truck className="h-3 w-3 text-primary" />
-                           <span className="text-xs font-semibold text-primary  uppercase">{booking.tracking_number}</span>
-                        </div>
-                        <button 
-                          onClick={() => handleCopyResi(booking.tracking_number)}
-                          className="p-2 hover:bg-primary hover:text-white bg-slate-50 text-slate-400 rounded-lg transition-all active:scale-95 border border-slate-100"
-                        >
-                           <Icons.Copy className="h-3 w-3" />
-                        </button>
-                     </div>
-                   ) : (
-                     <div className="flex items-center gap-2 text-slate-300 ">
-                        <Icons.Clock className="h-3 w-3" />
-                        <span className="text-xs font-medium">Menunggu Admin</span>
-                     </div>
-                   )}
-                </td>
-                <td className="px-8 py-6">
-                   <span className="text-base font-bold text-slate-900">
-                     Rp {Number(booking.total_rental_fee).toLocaleString('id-ID')}
-                   </span>
-                </td>
-                <td className="px-8 py-6">
-                   <Badge className={`border-none font-bold text-[10px] rounded-lg px-3 py-1  shadow-sm ${getStatusColor(booking.status)}`}>
-                     {booking.status.toUpperCase()}
-                   </Badge>
-                </td>
-                 <td className="px-8 py-6">
-                    <div className="flex gap-2">
-                       <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="rounded-lg h-9 px-4 text-xs font-semibold border hover:bg-slate-900 hover:text-white transition-all active:scale-95"
-                        onClick={() => setSelectedBooking(booking)}
-                       >
-                        Detail
-                       </Button>
-                       
-                       {((booking.status?.value || booking.status) === 'Pending_Payment') && (
-                         <Button 
-                          size="sm" 
-                          className="rounded-lg h-9 px-4 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95"
-                          onClick={() => handlePayment(booking.id)}
-                         >
-                          Bayar Sekarang
-                         </Button>
-                       )}
-
-                       {((booking.status?.value || booking.status) === 'Shipping') && (
-                         <Button 
-                          size="sm" 
-                          className="rounded-lg h-9 px-4 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95"
-                          onClick={() => handleConfirmReceived(booking.id)}
-                         >
-                          Terima Barang
-                         </Button>
-                       )}
-
-                       {((booking.status?.value || booking.status) === 'Rented') && (
-                         <Button 
-                          size="sm" 
-                          className="rounded-lg h-9 px-4 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95"
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setReturnModalOpen(true);
-                          }}
-                         >
-                          Ajukan Pengembalian
-                         </Button>
-                       )}
-
-                       {((booking.status?.value || booking.status)?.toLowerCase() === 'returned') && !booking.returned_at && (
-                         <div className="flex items-center gap-2 text-amber-600 px-3 py-1.5 bg-amber-50 rounded-lg border border-amber-200 animate-pulse whitespace-nowrap">
-                            <Icons.Loader2 className="h-3 w-3 animate-spin" />
-                            <span className="text-[8px] font-semibold text-xs">Pengecekan Admin</span>
-                         </div>
-                       )}
-
-                       {((booking.status?.value || booking.status)?.toLowerCase() === 'returned') && booking.returned_at && (
-                         <div className="flex flex-col items-end gap-2">
-                            {Number(booking.total_fine) > Number(booking.locked_deposit_amount) ? (
-                              <Button 
-                                size="sm" 
-                                className="rounded-xl h-10 px-4 font-semibold text-xs bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 active:scale-95 flex items-center gap-2"
-                                onClick={() => {
-                                  setSelectedBooking(booking);
-                                  setFineModalOpen(true);
-                                }}
-                              >
-                                <Icons.AlertCircle className="h-4 w-4" />
-                                Review & Bayar Denda
-                              </Button>
-                            ) : (
-                              <Button 
-                               size="sm" 
-                               className="rounded-lg h-9 px-4 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95"
-                               onClick={() => {
-                                 const adminPhone = "6283832352467";
-                                 const amount = Number(booking.locked_deposit_amount);
-                                 const finalAmount = amount - (Number(booking.total_fine) || 0);
-                                 const message = `Halo Admin, saya ingin mengajukan pengembalian deposit:\n\n` +
-                                                 `No. Booking: ${booking.booking_code}\n` +
-                                                 `Deposit Awal: Rp ${amount.toLocaleString('id-ID')}\n` +
-                                                 `Total Denda: Rp ${(Number(booking.total_fine) || 0).toLocaleString('id-ID')}\n` +
-                                                 `Estimasi Refund: Rp ${finalAmount.toLocaleString('id-ID')}\n\n` +
-                                                 `Mohon segera diproses ke rekening saya. Terima kasih.`;
-                                 const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
-                                 window.open(whatsappUrl, '_blank');
-                               }}
-                              >
-                                Tarik Deposit
-                              </Button>
-                            )}
-                         </div>
-                       )}
+                  {booking.tracking_number ? (
+                    <div className="flex items-center gap-2">
+                      <div className="bg-primary/5 border border-primary/10 px-3 py-1.5 rounded-xl flex items-center gap-2">
+                        <Icons.Truck className="h-3 w-3 text-primary" />
+                        <span className="text-xs font-semibold text-primary  uppercase">{booking.tracking_number}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopyResi(booking.tracking_number)}
+                        className="p-2 hover:bg-primary hover:text-white bg-slate-50 text-slate-400 rounded-lg transition-all active:scale-95 border border-slate-100"
+                      >
+                        <Icons.Copy className="h-3 w-3" />
+                      </button>
                     </div>
-                 </td>
+                  ) : (
+                    <div className="flex items-center gap-2 text-slate-300 ">
+                      <Icons.Clock className="h-3 w-3" />
+                      <span className="text-xs font-medium">Menunggu Admin</span>
+                    </div>
+                  )}
+                </td>
+                <td className="px-8 py-6">
+                  <div className="flex flex-col">
+                    <span className="text-base font-bold text-slate-900">
+                      Rp {(
+                        Number(booking.total_rental_fee) +
+                        Number(booking.locked_deposit_amount) +
+                        Number(booking.shipping_cost || 0) +
+                        (booking.accessories?.reduce((sum, acc) => sum + Number(acc.pivot?.price_at_booking || acc.rental_price), 0) || 0)
+                      ).toLocaleString('id-ID')}
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Grand Total</span>
+                  </div>
+                </td>
+                <td className="px-8 py-6">
+                  <Badge className={`border-none font-bold text-[10px] rounded-lg px-3 py-1  shadow-sm ${getStatusColor(booking.status)}`}>
+                    {booking.status.toUpperCase()}
+                  </Badge>
+                </td>
+                <td className="px-8 py-6">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg h-9 px-4 text-xs font-semibold border hover:bg-slate-900 hover:text-white transition-all active:scale-95"
+                      onClick={() => setSelectedBooking(booking)}
+                    >
+                      Detail
+                    </Button>
+
+                    {((booking.status?.value || booking.status) === 'Pending_Payment') && (
+                      <Button
+                        size="sm"
+                        className="rounded-lg h-9 px-4 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95"
+                        onClick={() => handlePayment(booking.id)}
+                      >
+                        Bayar Sekarang
+                      </Button>
+                    )}
+
+                    {((booking.status?.value || booking.status) === 'Shipping') && (
+                      <Button
+                        size="sm"
+                        className="rounded-lg h-9 px-4 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95"
+                        onClick={() => handleConfirmReceived(booking.id)}
+                      >
+                        Terima Barang
+                      </Button>
+                    )}
+
+                    {((booking.status?.value || booking.status) === 'Rented') && (
+                      <Button
+                        size="sm"
+                        className="rounded-lg h-9 px-4 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95"
+                        onClick={() => {
+                          setSelectedBooking(booking);
+                          setReturnModalOpen(true);
+                        }}
+                      >
+                        Ajukan Pengembalian
+                      </Button>
+                    )}
+
+                    {((booking.status?.value || booking.status)?.toLowerCase() === 'returned') && !booking.returned_at && (
+                      <div className="flex items-center gap-2 text-amber-600 px-3 py-1.5 bg-amber-50 rounded-lg border border-amber-200 animate-pulse whitespace-nowrap">
+                        <Icons.Loader2 className="h-3 w-3 animate-spin" />
+                        <span className="text-[8px] font-semibold text-xs">Pengecekan Admin</span>
+                      </div>
+                    )}
+
+                    {((booking.status?.value || booking.status)?.toLowerCase() === 'returned') && booking.returned_at && (
+                      <div className="flex flex-col items-end gap-2">
+                        {Number(booking.total_fine) > Number(booking.locked_deposit_amount) ? (
+                          <Button
+                            size="sm"
+                            className="rounded-xl h-10 px-4 font-semibold text-xs bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 active:scale-95 flex items-center gap-2"
+                            onClick={() => {
+                              setSelectedBooking(booking);
+                              setFineModalOpen(true);
+                            }}
+                          >
+                            <Icons.AlertCircle className="h-4 w-4" />
+                            Review & Bayar Denda
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="rounded-lg h-9 px-4 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95"
+                            onClick={() => {
+                              const adminPhone = "6283832352467";
+                              const amount = Number(booking.locked_deposit_amount);
+                              const finalAmount = amount - (Number(booking.total_fine) || 0);
+                              const message = `Halo Admin, saya ingin mengajukan pengembalian deposit:\n\n` +
+                                `No. Booking: ${booking.booking_code}\n` +
+                                `Deposit Awal: Rp ${amount.toLocaleString('id-ID')}\n` +
+                                `Total Denda: Rp ${(Number(booking.total_fine) || 0).toLocaleString('id-ID')}\n` +
+                                `Estimasi Refund: Rp ${finalAmount.toLocaleString('id-ID')}\n\n` +
+                                `Mohon segera diproses ke rekening saya. Terima kasih.`;
+                              const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
+                              window.open(whatsappUrl, '_blank');
+                            }}
+                          >
+                            Tarik Deposit
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </td>
               </tr>
             )) : (
               <tr>
@@ -316,7 +336,7 @@ export function BookingTable({
                 <div className="flex gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
                   <div className="h-20 w-16 rounded-lg overflow-hidden flex-shrink-0 border border-slate-200">
                     <img
-                      src={selectedBooking.costume?.images?.[0] ? `http://127.0.0.1:8000/storage/${selectedBooking.costume.images[0].image_path}` : "https://via.placeholder.com/100"}
+                      src={selectedBooking.costume?.images?.[0] ? `${selectedBooking.costume.images[0].image_path}` : "https://via.placeholder.com/100"}
                       className="w-full h-full object-cover"
                       alt={selectedBooking.costume?.name}
                     />
@@ -375,7 +395,7 @@ export function BookingTable({
                 {/* Payment Summary */}
                 <div className="space-y-3 pt-4 border-t border-slate-100 bg-slate-50/30 -mx-6 px-6 pb-6">
                   <p className="text-[10px] font-semibold uppercase text-slate-400 mb-2">Rincian Pembayaran</p>
-                  
+
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Biaya Sewa Kostum</span>
                     <span className="font-medium text-slate-700">Rp {Number(selectedBooking.total_rental_fee).toLocaleString('id-ID')}</span>
@@ -385,8 +405,17 @@ export function BookingTable({
                     <div className="space-y-2 py-2 border-y border-slate-100 border-dashed my-2">
                       <p className="text-[9px] font-bold text-slate-400 uppercase">Aksesoris</p>
                       {selectedBooking.accessories.map(acc => (
-                        <div key={acc.id} className="flex justify-between text-sm">
-                          <span className="text-slate-500 italic ml-2">- {acc.name}</span>
+                        <div key={acc.id} className="flex justify-between items-center text-sm py-1">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-white overflow-hidden border border-slate-200 flex-shrink-0">
+                               {acc.image_path ? (
+                                 <img src={acc.image_path} alt={acc.name} className="h-full w-full object-cover" />
+                               ) : (
+                                 <Icons.Gem className="h-4 w-4 text-slate-300 m-auto mt-2 flex justify-center" />
+                               )}
+                            </div>
+                            <span className="text-slate-500 italic text-xs">{acc.name}</span>
+                          </div>
                           <span className="font-medium text-slate-700">Rp {Number(acc.pivot?.price_at_booking || acc.rental_price).toLocaleString('id-ID')}</span>
                         </div>
                       ))}
@@ -397,6 +426,16 @@ export function BookingTable({
                     <span className="text-slate-500">Deposit (Jaminan)</span>
                     <span className="font-medium text-slate-700">Rp {Number(selectedBooking.locked_deposit_amount).toLocaleString('id-ID')}</span>
                   </div>
+
+                  {Number(selectedBooking.shipping_cost) > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <div className="flex flex-col">
+                        <span className="text-slate-500">Biaya Pengiriman</span>
+                        <span className="text-[10px] text-slate-400 italic">{selectedBooking.courier_name} ({selectedBooking.courier_service})</span>
+                      </div>
+                      <span className="font-medium text-slate-700">Rp {Number(selectedBooking.shipping_cost).toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
 
                   {(Number(selectedBooking.total_fine) > 0) && (
                     <div className="flex justify-between text-sm text-rose-600 font-medium pt-2 border-t border-slate-100 border-dashed">
@@ -412,8 +451,9 @@ export function BookingTable({
                     </div>
                     <span className="text-primary text-2xl font-black italic tracking-tighter">
                       Rp {(
-                        Number(selectedBooking.total_rental_fee) + 
-                        Number(selectedBooking.locked_deposit_amount) + 
+                        Number(selectedBooking.total_rental_fee) +
+                        Number(selectedBooking.locked_deposit_amount) +
+                        Number(selectedBooking.shipping_cost || 0) +
                         (selectedBooking.accessories?.reduce((sum, acc) => sum + Number(acc.pivot?.price_at_booking || acc.rental_price), 0) || 0) +
                         (Number(selectedBooking.total_fine) || 0)
                       ).toLocaleString('id-ID')}
@@ -423,9 +463,9 @@ export function BookingTable({
 
                 {/* Admin Verification (Late/Damage) */}
                 {!selectedBooking.returned_at && selectedBooking.status === 'Returned' && (
-                   <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 text-center">
-                      <p className="text-xs font-semibold text-amber-700">Admin sedang memverifikasi kondisi kostum. Mohon tunggu informasi denda jika ada.</p>
-                   </div>
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 text-center">
+                    <p className="text-xs font-semibold text-amber-700">Admin sedang memverifikasi kondisi kostum. Mohon tunggu informasi denda jika ada.</p>
+                  </div>
                 )}
               </div>
 
@@ -457,8 +497,8 @@ export function BookingTable({
             <form onSubmit={handleReturnSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-semibold text-xs text-slate-400">Nomor Resi Pengembalian</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={returnResi}
                   onChange={(e) => setReturnResi(e.target.value)}
                   className="w-full h-14 px-6 rounded-2xl bg-slate-50 border border-slate-100 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -478,8 +518,8 @@ export function BookingTable({
                       <p className="text-[10px] font-bold text-slate-400 uppercase ">Klik untuk upload foto</p>
                     </>
                   )}
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     onChange={(e) => setReturnFile(e.target.files[0])}
                     className="absolute inset-0 opacity-0 cursor-pointer"
                     accept="image/*"
@@ -489,15 +529,15 @@ export function BookingTable({
               </div>
 
               <div className="flex gap-4 pt-4">
-                <Button 
+                <Button
                   type="button"
-                  variant="ghost" 
+                  variant="ghost"
                   className="flex-1 h-14 rounded-2xl font-semibold text-xs"
                   onClick={() => setReturnModalOpen(false)}
                 >
                   Batal
                 </Button>
-                <Button 
+                <Button
                   type="submit"
                   className="flex-1 h-14 rounded-2xl bg-slate-900 hover:bg-primary text-white font-semibold text-xs shadow-xl shadow-slate-900/10"
                 >
@@ -511,82 +551,82 @@ export function BookingTable({
 
       {/* Fine Settlement Modal */}
       <Dialog open={fineModalOpen} onOpenChange={(open) => {
-          setFineModalOpen(open);
-          if(!open) setSelectedBooking(null);
+        setFineModalOpen(open);
+        if (!open) setSelectedBooking(null);
       }}>
-          <DialogContent className="sm:max-w-[450px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-              <div className="bg-rose-600 p-8 text-white">
-                  <div className="flex justify-between items-start mb-4">
-                      <div className="p-3 bg-white/20 rounded-2xl">
-                          <Icons.AlertCircle className="h-6 w-6" />
-                      </div>
-                      <Button variant="ghost" size="sm" className="text-white hover:bg-white/10" onClick={() => setFineModalOpen(false)}>
-                          <Icons.X className="h-4 w-4" />
-                      </Button>
-                  </div>
-                  <h2 className="text-2xl font-bold mb-1">Penyelesaian Denda</h2>
-                  <p className="text-white/80 text-xs font-medium ">Harap tinjau denda sebelum melakukan pelunasan.</p>
+        <DialogContent className="sm:max-w-[450px] rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+          <div className="bg-rose-600 p-8 text-white">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-3 bg-white/20 rounded-2xl">
+                <Icons.AlertCircle className="h-6 w-6" />
+              </div>
+              <Button variant="ghost" size="sm" className="text-white hover:bg-white/10" onClick={() => setFineModalOpen(false)}>
+                <Icons.X className="h-4 w-4" />
+              </Button>
+            </div>
+            <h2 className="text-2xl font-bold mb-1">Penyelesaian Denda</h2>
+            <p className="text-white/80 text-xs font-medium ">Harap tinjau denda sebelum melakukan pelunasan.</p>
+          </div>
+
+          {selectedBooking && (
+            <div className="p-8 space-y-8 bg-white">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-slate-400 uppercase  text-[9px]">Jaminan (Deposit)</span>
+                  <span className="font-bold text-slate-900">Rp {Number(selectedBooking.locked_deposit_amount).toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-rose-600">
+                  <span className="font-bold uppercase  text-[9px]">Total Denda Keseluruhan</span>
+                  <span className="font-bold">Rp {Number(selectedBooking.total_fine).toLocaleString('id-ID')}</span>
+                </div>
+                <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+                  <span className="text-[10px] font-semibold text-xs text-slate-900">Sisa yang harus dibayar</span>
+                  <span className="text-xl font-bold text-rose-600">
+                    Rp {(Number(selectedBooking.total_fine) - Number(selectedBooking.locked_deposit_amount)).toLocaleString('id-ID')}
+                  </span>
+                </div>
               </div>
 
-              {selectedBooking && (
-                  <div className="p-8 space-y-8 bg-white">
-                      <div className="space-y-4">
-                          <div className="flex justify-between items-center text-xs">
-                              <span className="font-bold text-slate-400 uppercase  text-[9px]">Jaminan (Deposit)</span>
-                              <span className="font-bold text-slate-900">Rp {Number(selectedBooking.locked_deposit_amount).toLocaleString('id-ID')}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs text-rose-600">
-                              <span className="font-bold uppercase  text-[9px]">Total Denda Keseluruhan</span>
-                              <span className="font-bold">Rp {Number(selectedBooking.total_fine).toLocaleString('id-ID')}</span>
-                          </div>
-                          <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                              <span className="text-[10px] font-semibold text-xs text-slate-900">Sisa yang harus dibayar</span>
-                              <span className="text-xl font-bold text-rose-600">
-                                  Rp {(Number(selectedBooking.total_fine) - Number(selectedBooking.locked_deposit_amount)).toLocaleString('id-ID')}
-                              </span>
-                          </div>
-                      </div>
-
-                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
-                          <div className="space-y-1">
-                              <p className="text-[9px] font-bold uppercase text-slate-400 ">Catatan Admin</p>
-                              <p className="text-xs font-medium text-slate-700  leading-relaxed">
-                                  {selectedBooking.damage_description || "Tidak ada catatan tambahan."}
-                              </p>
-                          </div>
-                          {selectedBooking.damage_proof_image && (
-                              <div className="space-y-2">
-                                  <p className="text-[9px] font-bold uppercase text-slate-400 ">Bukti Foto Kerusakan</p>
-                                  <div className="rounded-2xl overflow-hidden border-2 border-white shadow-md">
-                                      <img 
-                                          src={`http://127.0.0.1:8000/storage/${selectedBooking.damage_proof_image}`} 
-                                          className="w-full h-48 object-cover hover:scale-105 transition-transform duration-500 cursor-pointer" 
-                                          alt="Proof"
-                                          onClick={() => window.open(`http://127.0.0.1:8000/storage/${selectedBooking.damage_proof_image}`, '_blank')}
-                                      />
-                                  </div>
-                                  <p className="text-[8px] text-slate-400  text-center">Klik gambar untuk memperbesar</p>
-                              </div>
-                          )}
-                      </div>
-
-                      <Button 
-                          className="w-full h-14 rounded-[1.5rem] bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-3"
-                          onClick={() => {
-                              fetcher.submit(
-                                  { intent: 'pay_fine', booking_id: selectedBooking.id },
-                                  { method: 'post' }
-                              );
-                              setFineModalOpen(false);
-                          }}
-                          disabled={fetcher.state !== 'idle'}
-                      >
-                          <Icons.CreditCard className="h-4 w-4" />
-                          Bayar Sekarang via Midtrans
-                      </Button>
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[9px] font-bold uppercase text-slate-400 ">Catatan Admin</p>
+                  <p className="text-xs font-medium text-slate-700  leading-relaxed">
+                    {selectedBooking.damage_description || "Tidak ada catatan tambahan."}
+                  </p>
+                </div>
+                {selectedBooking.damage_proof_image && (
+                  <div className="space-y-2">
+                    <p className="text-[9px] font-bold uppercase text-slate-400 ">Bukti Foto Kerusakan</p>
+                    <div className="rounded-2xl overflow-hidden border-2 border-white shadow-md">
+                      <img
+                        src={`${selectedBooking.damage_proof_image}`}
+                        className="w-full h-48 object-cover hover:scale-105 transition-transform duration-500 cursor-pointer"
+                        alt="Proof"
+                        onClick={() => window.open(`${selectedBooking.damage_proof_image}`, '_blank')}
+                      />
+                    </div>
+                    <p className="text-[8px] text-slate-400  text-center">Klik gambar untuk memperbesar</p>
                   </div>
-              )}
-          </DialogContent>
+                )}
+              </div>
+
+              <Button
+                className="w-full h-14 rounded-[1.5rem] bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+                onClick={() => {
+                  fetcher.submit(
+                    { intent: 'pay_fine', booking_id: selectedBooking.id },
+                    { method: 'post' }
+                  );
+                  setFineModalOpen(false);
+                }}
+                disabled={fetcher.state !== 'idle'}
+              >
+                <Icons.CreditCard className="h-4 w-4" />
+                Bayar Sekarang via Midtrans
+              </Button>
+            </div>
+          )}
+        </DialogContent>
       </Dialog>
     </div>
   );

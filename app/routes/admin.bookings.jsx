@@ -258,12 +258,12 @@ export default function AdminBookingsPage() {
                                   </p>
                                   {booking.return_proof_image && (
                                     <a
-                                      href={`http://127.0.0.1:8000/storage/${booking.return_proof_image}`}
+                                      href={`${booking.return_proof_image}`}
                                       target="_blank"
                                       rel="noreferrer"
                                       className="h-16 w-16 rounded-lg overflow-hidden border-2 border-white shadow-sm hover:scale-105 transition-transform"
                                     >
-                                      <img src={`http://127.0.0.1:8000/storage/${booking.return_proof_image}`} className="w-full h-full object-cover" alt="Return Proof" />
+                                      <img src={`${booking.return_proof_image}`} className="w-full h-full object-cover" alt="Return Proof" />
                                     </a>
                                   )}
                                 </div>
@@ -486,7 +486,7 @@ export default function AdminBookingsPage() {
                       <Icons.Copy className="h-3.5 w-3.5 mr-2" /> Salin Alamat
                     </Button>
                   </div>
-                  
+
                   <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 space-y-6">
                     {(() => {
                       const parts = (selectedBookingDetail.shipping_address || "").split(" | ");
@@ -534,7 +534,7 @@ export default function AdminBookingsPage() {
                     <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-slate-200 group hover:border-primary/30 transition-colors">
                       <div className="h-14 w-12 rounded-lg overflow-hidden flex-shrink-0 border border-slate-100">
                         <img
-                          src={selectedBookingDetail.costume?.images?.[0] ? `http://127.0.0.1:8000/storage/${selectedBookingDetail.costume.images[0].image_path}` : "https://via.placeholder.com/100"}
+                          src={selectedBookingDetail.costume?.images?.[0] ? `${selectedBookingDetail.costume.images[0].image_path}` : "https://via.placeholder.com/100"}
                           className="w-full h-full object-cover"
                           alt={selectedBookingDetail.costume?.name}
                         />
@@ -606,7 +606,7 @@ export default function AdminBookingsPage() {
                           <p className="text-sm font-black text-rose-700 italic">Rp {Number(selectedBookingDetail.damage_fine || 0).toLocaleString('id-ID')}</p>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-1">
                         <p className="text-[9px] font-bold text-rose-400 uppercase">Catatan Admin</p>
                         <p className="text-xs text-rose-700 font-medium italic">"{selectedBookingDetail.damage_description || 'Tidak ada catatan.'}"</p>
@@ -616,10 +616,10 @@ export default function AdminBookingsPage() {
                         <div className="space-y-2">
                           <p className="text-[9px] font-bold text-rose-400 uppercase">Foto Bukti Kerusakan</p>
                           <div className="rounded-xl overflow-hidden border-2 border-white shadow-sm h-40">
-                            <img 
-                              src={`http://127.0.0.1:8000/storage/${selectedBookingDetail.damage_proof_image}`} 
-                              className="w-full h-full object-cover" 
-                              alt="Damage Proof" 
+                            <img
+                              src={`${selectedBookingDetail.damage_proof_image}`}
+                              className="w-full h-full object-cover"
+                              alt="Damage Proof"
                             />
                           </div>
                         </div>

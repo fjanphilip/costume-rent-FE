@@ -107,7 +107,7 @@ export default function CatalogFeature() {
                         <img
                           src={
                             product.images?.[0]?.image_path
-                              ? `http://127.0.0.1:8000/storage/${product.images[0].image_path}`
+                              ? `${product.images[0].image_path}`
                               : "https://images.unsplash.com/photo-1608831540955-35094d48694a?w=500&q=80"
                           }
                           alt={product.name}
