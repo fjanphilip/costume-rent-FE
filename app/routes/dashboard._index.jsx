@@ -69,9 +69,7 @@ export const action = async ({ request }) => {
     if (intent === "request_return") {
       const bookingId = formData.get("booking_id");
       // Note: formData should be sent as multipart/form-data for files
-      await client.post(`/bookings/${bookingId}/request-return`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      await client.post(`/bookings/${bookingId}/request-return`, formData);
       return json({ success: true });
     }
 

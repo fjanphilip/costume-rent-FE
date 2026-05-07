@@ -25,7 +25,7 @@ export const loader = async ({ request }) => {
 
   try {
     const response = await getApiClient(token).get(`/costumes?page=${page}`);
-    return json({ 
+    return json({
       costumes: response.data.data || [],
       pagination: response.data.meta || {
         current_page: response.data.current_page,
@@ -103,7 +103,7 @@ export default function AdminCostumesPage() {
     setEditingCostume(costume);
     setFormData({ name: costume.name, slug: costume.slug });
     if (costume.images) {
-      setPreviewImages(costume.images.map(img => `http://127.0.0.1:8000/storage/${img.image_path}`));
+      setPreviewImages(costume.images.map(img => `${img.image_path}`));
     } else {
       setPreviewImages([]);
     }
@@ -165,7 +165,7 @@ export default function AdminCostumesPage() {
                         <div className="flex items-center gap-4">
                           <div className="h-16 w-12 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
                             <img
-                              src={costume.images?.[0] ? `http://127.0.0.1:8000/storage/${costume.images[0].image_path}` : "https://via.placeholder.com/100"}
+                              src={costume.images?.[0] ? `${costume.images[0].image_path}` : "https://via.placeholder.com/100"}
                               className="w-full h-full object-cover"
                               alt=""
                             />
@@ -189,11 +189,10 @@ export default function AdminCostumesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge className={`rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                          costume.status === 'available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                          costume.status === 'rented' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
-                          'bg-slate-50 text-slate-600 border-slate-100'
-                        }`}>
+                        <Badge className={`rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider ${costume.status === 'available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                          costume.status === 'rented' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                            'bg-slate-50 text-slate-600 border-slate-100'
+                          }`}>
                           {costume.status}
                         </Badge>
                       </td>
@@ -249,8 +248,8 @@ export default function AdminCostumesPage() {
                       const pageNum = i + 1;
                       // Simple logic to show current, first, last, and around current
                       if (
-                        pageNum === 1 || 
-                        pageNum === pagination.last_page || 
+                        pageNum === 1 ||
+                        pageNum === pagination.last_page ||
                         (pageNum >= pagination.current_page - 1 && pageNum <= pagination.current_page + 1)
                       ) {
                         return (
@@ -258,11 +257,10 @@ export default function AdminCostumesPage() {
                             key={pageNum}
                             variant={pagination.current_page === pageNum ? "default" : "outline"}
                             size="sm"
-                            className={`h-9 w-9 rounded-xl font-bold ${
-                              pagination.current_page === pageNum 
-                              ? 'bg-slate-900 text-white' 
+                            className={`h-9 w-9 rounded-xl font-bold ${pagination.current_page === pageNum
+                              ? 'bg-slate-900 text-white'
                               : 'border-slate-200 text-slate-600'
-                            }`}
+                              }`}
                             asChild={pagination.current_page !== pageNum}
                           >
                             {pagination.current_page === pageNum ? (
@@ -320,22 +318,22 @@ export default function AdminCostumesPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase text-slate-400">Nama Kostum</label>
-                    <Input 
-                      name="name" 
-                      value={formData.name} 
+                    <Input
+                      name="name"
+                      value={formData.name}
                       onChange={handleNameChange}
-                      required 
-                      placeholder="Contoh: Raiden Shogun" 
+                      required
+                      placeholder="Contoh: Raiden Shogun"
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase text-slate-400">Slug</label>
-                    <Input 
-                      name="slug" 
-                      value={formData.slug} 
-                      onChange={(e) => setFormData({...formData, slug: e.target.value})}
-                      required 
-                      placeholder="raiden-shogun-d3" 
+                    <Input
+                      name="slug"
+                      value={formData.slug}
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                      required
+                      placeholder="raiden-shogun-d3"
                     />
                   </div>
                 </div>
@@ -349,6 +347,11 @@ export default function AdminCostumesPage() {
                     <label className="text-[10px] font-bold uppercase text-slate-400">Series / Anime</label>
                     <Input name="series" defaultValue={editingCostume?.series} required placeholder="Contoh: Genshin Impact" />
                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-slate-400">Kategori</label>
+                  <Input name="category" defaultValue={editingCostume?.category} placeholder="Contoh: Genshin Impact, Honkai, dll" />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
@@ -368,8 +371,8 @@ export default function AdminCostumesPage() {
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase text-slate-400">Status</label>
-                  <select 
-                    name="status" 
+                  <select
+                    name="status"
                     defaultValue={editingCostume?.status || "available"}
                     className="w-full h-10 px-3 rounded-lg border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                   >
@@ -393,17 +396,17 @@ export default function AdminCostumesPage() {
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase text-slate-400">Gambar Kostum</label>
-                  <div 
+                  <div
                     className="border-2 border-dashed border-slate-200 rounded-2xl p-6 flex flex-col items-center gap-3 cursor-pointer hover:bg-slate-50 transition-all"
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <Icons.UploadCloud className="h-8 w-8 text-slate-400" />
                     <p className="text-xs text-slate-500 font-medium">Klik untuk upload gambar kostum</p>
-                    <input 
-                      type="file" 
-                      name="images" 
-                      multiple 
-                      className="hidden" 
+                    <input
+                      type="file"
+                      name="images[]"
+                      multiple
+                      className="hidden"
                       ref={fileInputRef}
                       onChange={handleImageChange}
                       accept="image/*"

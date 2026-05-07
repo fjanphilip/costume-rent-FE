@@ -23,15 +23,9 @@ export default function CostumeDetailFeature() {
     from: undefined,
     to: undefined,
   });
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
 
   const handleOpenChange = (isOpen) => {
-    if (!isOpen && date?.from && date?.to) {
-      const diff = Math.ceil((date.to - date.from) / (1000 * 60 * 60 * 24));
-      if (diff >= 0 && diff < 3) {
-        setIsAlertOpen(true);
-      }
-    }
+    // Empty handler, can be used for other popover close side-effects in the future
   };
 
   const images = costume.images || [];
@@ -80,7 +74,7 @@ export default function CostumeDetailFeature() {
               <div className="sticky top-32 space-y-6">
                 <div className="relative aspect-[4/5] rounded-[3rem] overflow-hidden bg-white border-8 border-white shadow-2xl shadow-primary/5 group">
                   <img
-                    src={selectedImage ? `http://127.0.0.1:8000/storage/${selectedImage}` : "https://images.unsplash.com/photo-1608831540955-35094d48694a?w=800&q=80"}
+                    src={selectedImage ? `${selectedImage}` : "https://images.unsplash.com/photo-1608831540955-35094d48694a?w=800&q=80"}
                     alt={costume.name}
                     className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
                   />
@@ -101,7 +95,7 @@ export default function CostumeDetailFeature() {
                         className={`relative h-20 w-20 flex-shrink-0 rounded-2xl overflow-hidden border-2 transition-all ${selectedImage === img.image_path ? 'border-primary shadow-lg shadow-primary/10 scale-105' : 'border-white hover:border-primary/20'
                           }`}
                       >
-                        <img src={`http://127.0.0.1:8000/storage/${img.image_path}`} className="w-full h-full object-cover" alt="" />
+                        <img src={`${img.image_path}`} className="w-full h-full object-cover" alt="" />
                       </button>
                     ))}
                   </div>
@@ -155,8 +149,8 @@ export default function CostumeDetailFeature() {
                     >
                       <Button
                         className={`h-16 px-10 rounded-2xl transition-all text-base group w-full font-black shadow-2xl ${!user?.is_verified
-                            ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
-                            : 'bg-white hover:bg-primary/90 hover:text-white text-black shadow-primary/20'
+                          ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
+                          : 'bg-white hover:bg-primary/90 hover:text-white text-black shadow-primary/20'
                           }`}
                       >
                         {!user?.is_verified ? (
@@ -206,11 +200,21 @@ export default function CostumeDetailFeature() {
                   <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2 italic">
                     <Icons.Layers className="h-4 w-4 text-primary" /> Aksesori Item
                   </h3>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-col gap-3">
                     {costume.accessories?.length > 0 ? costume.accessories.map(acc => (
-                      <Badge key={acc.id} variant="outline" className="border-slate-200 text-slate-600 font-bold text-[10px] uppercase px-3 py-1">
-                        {acc.name}
-                      </Badge>
+                      <div key={acc.id} className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
+                        <div className="h-12 w-12 rounded-xl bg-slate-50 overflow-hidden flex-shrink-0 border border-slate-100">
+                           {acc.image_path ? (
+                             <img src={acc.image_path} alt={acc.name} className="h-full w-full object-cover" />
+                           ) : (
+                             <Icons.Gem className="h-5 w-5 text-slate-300 m-auto mt-3.5 flex justify-center" />
+                           )}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black uppercase text-slate-800 tracking-tight">{acc.name}</span>
+                          <span className="text-[9px] font-bold text-primary italic leading-none">Rp {acc.rental_price.toLocaleString('id-ID')}</span>
+                        </div>
+                      </div>
                     )) : <span className="text-xs text-muted-foreground italic">Tidak ada aksesori.</span>}
                   </div>
                 </div>
@@ -232,26 +236,6 @@ export default function CostumeDetailFeature() {
       </main>
 
       <Footer />
-
-      {/* Date Validation Alert Modal */}
-      <Dialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white rounded-[3rem] border-none shadow-2xl">
-          <div className="p-10 flex flex-col items-center text-center space-y-6">
-            <div className="h-20 w-20 bg-rose-500 rounded-full flex items-center justify-center shadow-lg shadow-rose-200 shrink-0">
-              <Icons.AlertTriangle className="h-10 w-10 text-white" />
-            </div>
-            <div className="space-y-2">
-              <DialogTitle className="text-xl font-bold text-slate-900">Durasi Kurang dari 3 Hari</DialogTitle>
-              <DialogDescription className="text-sm text-slate-500">
-                Peringatan: Minimal durasi penyewaan kostum adalah <strong className="text-slate-900">3 hari</strong>. Sistem akan secara otomatis membulatkan perhitungan biaya untuk 3 hari sewa.
-              </DialogDescription>
-            </div>
-            <Button onClick={() => setIsAlertOpen(false)} className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm">
-              Saya Mengerti
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

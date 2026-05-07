@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import * as Icons from "lucide-react";
 import { useLoaderData, useActionData, Form, Link, useNavigate, useNavigation } from "@remix-run/react";
+import { getApiClient } from "~/lib/api";
 import { Navbar } from "../home-catalog/components/Navbar";
 import { Footer } from "~/components/layout/Footer";
 import { Button } from "~/components/ui/button";
@@ -10,7 +11,7 @@ import { Badge } from "~/components/ui/badge";
 import { format } from "date-fns";
 
 export default function CheckoutFeature() {
-   const { user, costume, addresses, bookedDates: initialBookedDates, initialStartDate, initialEndDate } = useLoaderData();
+   const { user, costume, addresses, token: loaderToken, bookedDates: initialBookedDates, initialStartDate, initialEndDate } = useLoaderData();
    const actionData = useActionData();
    const navigate = useNavigate();
    const navigation = useNavigation();
@@ -27,24 +28,26 @@ export default function CheckoutFeature() {
       from: initialStartDate ? new Date(initialStartDate) : undefined,
       to: initialEndDate ? new Date(initialEndDate) : undefined,
    });
-   const [isAlertOpen, setIsAlertOpen] = useState(false);
+   const [shippingRates, setShippingRates] = useState([]);
+   const [selectedShipping, setSelectedShipping] = useState(null);
+   const [isShippingLoading, setIsShippingLoading] = useState(false);
+   const [shippingError, setShippingError] = useState(null);
+   const [selectedAddressId, setSelectedAddressId] = useState(() => {
+      const primary = (addresses || []).find(a => a.is_primary);
+      return primary ? primary.id : (addresses?.[0]?.id || "");
+   });
+   const [token] = useState(useLoaderData().token || "");
 
    const handleOpenChange = (isOpen) => {
-      if (!isOpen && date?.from && date?.to) {
-         const diffTime = Math.abs(date.to - date.from);
-         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-         if (diffDays >= 0 && diffDays < 3) {
-            setIsAlertOpen(true);
-         }
-      }
+      // Empty handler, can be used for other popover close side-effects in the future
    };
    const [notes, setNotes] = useState("");
    const [selectedAccessories, setSelectedAccessories] = useState([]);
 
    const toggleAccessory = (accId) => {
-      setSelectedAccessories(prev => 
-         prev.includes(accId) 
-            ? prev.filter(id => id !== accId) 
+      setSelectedAccessories(prev =>
+         prev.includes(accId)
+            ? prev.filter(id => id !== accId)
             : [...prev, accId]
       );
    };
@@ -111,9 +114,46 @@ export default function CheckoutFeature() {
    };
 
    const days = calculateDays();
+
+   // Manual Fetch Shipping Rates
+   const handleCheckShipping = async () => {
+      if (!selectedAddressId || !costume.id) return;
+
+      setIsShippingLoading(true);
+      setShippingError(null);
+      setShippingRates([]);
+
+      try {
+         const client = getApiClient(loaderToken);
+         const response = await client.post("/shipping/get-rates", {
+            address_id: selectedAddressId,
+            costume_id: costume.id
+         });
+
+         if (response.data.status === "success") {
+            const rates = response.data.data;
+            setShippingRates(rates);
+         } else {
+            setShippingError(response.data.message || "Gagal mengambil data ongkir.");
+         }
+      } catch (error) {
+         console.error("Shipping Fetch Error:", error);
+         setShippingError(error.response?.data?.message || "Terjadi kesalahan koneksi saat mengambil ongkir.");
+      } finally {
+         setIsShippingLoading(false);
+      }
+   };
+
+   // Reset shipping when address changes
+   useEffect(() => {
+      setShippingRates([]);
+      setSelectedShipping(null);
+      setShippingError(null);
+   }, [selectedAddressId]);
+
    const totalPrice = costume.rental_price * days;
    const deposit = costume.required_deposit;
-   
+
    const accessoriesTotal = useMemo(() => {
       if (!costume.accessories) return 0;
       return costume.accessories
@@ -121,7 +161,8 @@ export default function CheckoutFeature() {
          .reduce((sum, acc) => sum + acc.rental_price, 0);
    }, [costume.accessories, selectedAccessories]);
 
-   const grandTotal = totalPrice + deposit + accessoriesTotal;
+   const shippingPrice = selectedShipping ? selectedShipping.price : 0;
+   const grandTotal = totalPrice + deposit + accessoriesTotal + shippingPrice;
 
    const isVerified = user.is_verified == 1 || user.is_verified === true || user.is_verified === "1";
 
@@ -186,7 +227,7 @@ export default function CheckoutFeature() {
                      <div className="flex flex-col md:flex-row gap-10 items-center md:items-start text-center md:text-left">
                         <div className="w-40 h-48 rounded-[2rem] overflow-hidden bg-slate-100 border-4 border-white shadow-xl flex-shrink-0">
                            <img
-                              src={costume.images?.[0] ? `http://127.0.0.1:8000/storage/${costume.images[0].image_path}` : "https://via.placeholder.com/400"}
+                              src={costume.images?.[0] ? `${costume.images[0].image_path}` : "https://via.placeholder.com/400"}
                               className="w-full h-full object-cover"
                               alt=""
                            />
@@ -242,7 +283,7 @@ export default function CheckoutFeature() {
                               className="w-full min-h-[100px] p-4 rounded-3xl bg-slate-50 border border-slate-200 text-sm font-medium focus:ring-2 focus:ring-slate-900 outline-none transition-all resize-none"
                            />
                         </div>
-                        
+
                         {/* Accessories Selection */}
                         <div className="space-y-6">
                            <div className="flex items-center justify-between">
@@ -258,20 +299,22 @@ export default function CheckoutFeature() {
                            <div className="grid grid-cols-1 gap-3">
                               {costume.accessories && costume.accessories.length > 0 ? (
                                  costume.accessories.map((acc) => (
-                                    <div 
+                                    <div
                                        key={acc.id}
                                        onClick={() => toggleAccessory(acc.id)}
-                                       className={`group p-4 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between ${
-                                          selectedAccessories.includes(acc.id)
-                                             ? 'bg-primary/5 border-primary shadow-lg shadow-primary/10'
-                                             : 'bg-white border-slate-100 hover:border-slate-200'
-                                       }`}
+                                       className={`group p-4 rounded-3xl border-2 transition-all cursor-pointer flex items-center justify-between ${selectedAccessories.includes(acc.id)
+                                          ? 'bg-primary/5 border-primary shadow-lg shadow-primary/10'
+                                          : 'bg-white border-slate-100 hover:border-slate-200'
+                                          }`}
                                     >
                                        <div className="flex items-center gap-4">
-                                          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all ${
-                                             selectedAccessories.includes(acc.id) ? 'bg-primary text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-100'
-                                          }`}>
-                                             <Icons.Gem className="h-5 w-5" />
+                                          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center overflow-hidden transition-all ${selectedAccessories.includes(acc.id) ? 'bg-primary text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-100'
+                                             }`}>
+                                             {acc.image_path ? (
+                                                <img src={acc.image_path} alt={acc.name} className="h-full w-full object-cover" />
+                                             ) : (
+                                                <Icons.Gem className="h-5 w-5" />
+                                             )}
                                           </div>
                                           <div className="text-left">
                                              <p className={`text-sm font-black italic uppercase tracking-tight ${selectedAccessories.includes(acc.id) ? 'text-primary' : 'text-slate-700'}`}>{acc.name}</p>
@@ -293,44 +336,6 @@ export default function CheckoutFeature() {
                                  <div className="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-200 text-center">
                                     <Icons.Inbox className="h-8 w-8 text-slate-300 mx-auto mb-3" />
                                     <p className="text-xs font-bold text-slate-400 italic">Tidak ada aksesoris tambahan untuk kostum ini.</p>
-                                 </div>
-                              )}
-                           </div>
-                        </div>
-
-                        {/* Shipping Info */}
-                        <div className="space-y-6">
-                           <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                 <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
-                                    <Icons.MapPin className="h-5 w-5" />
-                                 </div>
-                                 <h3 className="text-lg font-black italic uppercase tracking-tight">Lokasi Pengiriman</h3>
-                              </div>
-                              <Link to="/dashboard/settings" className="text-[10px] font-black uppercase text-primary tracking-widest hover:underline transition-all">Kelola Alamat</Link>
-                           </div>
-                           <div className="p-6 rounded-3xl bg-slate-50/50 border border-slate-100">
-                              {addresses && addresses.find(a => a.is_primary) ? (
-                                 (() => {
-                                    const primary = addresses.find(a => a.is_primary);
-                                    return (
-                                       <>
-                                          <p className="text-sm font-black text-slate-800 mb-1">{primary.receiver_name} <span className="text-[10px] text-slate-400 font-bold ml-2">({primary.label})</span></p>
-                                          <p className="text-xs font-semibold text-slate-500 leading-relaxed italic line-clamp-2">
-                                             {primary.detail_address}, {primary.village_name}, {primary.district_name}, {primary.city_name}, {primary.province_name} {primary.postal_code}.
-                                          </p>
-                                          <p className="text-[10px] font-bold text-slate-400 mt-2 italic">{primary.phone_number}</p>
-                                       </>
-                                    );
-                                 })()
-                              ) : (
-                                 <div className="text-center py-4">
-                                    <p className="text-xs font-black text-rose-500 italic mb-3">Anda belum mengatur alamat utama.</p>
-                                    <Link to="/dashboard/settings">
-                                       <Button variant="outline" size="sm" className="h-8 rounded-xl text-[9px] font-black uppercase tracking-widest border-rose-200 text-rose-500 hover:bg-rose-50">
-                                          Atur Alamat Sekarang
-                                       </Button>
-                                    </Link>
                                  </div>
                               )}
                            </div>
@@ -360,6 +365,12 @@ export default function CheckoutFeature() {
                                     <span className="text-lg font-black italic">+ Rp {accessoriesTotal.toLocaleString('id-ID')}</span>
                                  </div>
                               )}
+                              {selectedShipping && (
+                                 <div className="flex justify-between items-center text-slate-600">
+                                    <span className="text-[11px] font-black uppercase tracking-widest italic">Ongkos Kirim</span>
+                                    <span className="text-lg font-black italic">+ Rp {selectedShipping.price.toLocaleString('id-ID')}</span>
+                                 </div>
+                              )}
                               <div className="flex justify-between items-center">
                                  <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic">Pembayaran</span>
                                  <Badge className="bg-blue-600 text-white border-none px-3 py-1 text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
@@ -368,134 +379,312 @@ export default function CheckoutFeature() {
                                  </Badge>
                               </div>
                            </div>
-                        </div>
 
-                        <div className="pt-8 border-t border-slate-200 mt-8 space-y-8">
-                           <div className="flex justify-between items-end">
-                              <div className="space-y-1">
-                                 <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Total Pembayaran</span>
-                                 <div className="flex gap-1">
-                                    <Icons.ShieldCheck className="h-4 w-4 text-emerald-500" />
-                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Secure Transaction</span>
+                           <div className="space-y-8 pt-6 border-t border-slate-100">
+                              {/* 1. Address Selection Dropdown */}
+                              <div className="space-y-4">
+                                 <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                       <Icons.MapPin className="h-4 w-4 text-slate-400" />
+                                       <h3 className="text-[11px] font-black italic uppercase tracking-widest text-slate-900">Lokasi Pengiriman</h3>
+                                    </div>
+                                    <Link to="/dashboard/settings" className="text-[9px] font-black uppercase text-primary tracking-widest hover:underline transition-all">Kelola Alamat</Link>
+                                 </div>
+
+                                 <div className="space-y-3">
+                                    {addresses && addresses.length > 0 ? (
+                                       <div className="relative group">
+                                          <select
+                                             value={selectedAddressId}
+                                             onChange={(e) => setSelectedAddressId(e.target.value)}
+                                             className="w-full h-14 pl-5 pr-10 rounded-2xl bg-white border-2 border-slate-100 shadow-sm text-xs font-bold text-slate-800 outline-none focus:border-primary/20 transition-all appearance-none cursor-pointer group-hover:border-slate-200"
+                                             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1.25rem center', backgroundSize: '1em' }}
+                                          >
+                                             {addresses.map(addr => (
+                                                <option key={addr.id} value={addr.id}>
+                                                   {addr.label} - {addr.receiver_name}
+                                                </option>
+                                             ))}
+                                          </select>
+                                       </div>
+                                    ) : null}
+
+                                    <div className="p-5 rounded-[2rem] bg-white border border-slate-100 shadow-sm relative overflow-hidden group">
+                                       <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110" />
+                                       <div className="relative z-10">
+                                          {addresses && addresses.find(a => a.id == selectedAddressId) ? (
+                                             (() => {
+                                                const addr = addresses.find(a => a.id == selectedAddressId);
+                                                return (
+                                                   <>
+                                                      <p className="text-xs font-black text-slate-800 mb-1 flex items-center gap-2">
+                                                         {addr.receiver_name}
+                                                         {addr.is_primary ? <Badge className="bg-emerald-500/10 text-emerald-600 border-none text-[7px] px-2 py-0">PRIMARY</Badge> : ""}
+                                                      </p>
+                                                      <p className="text-[10px] font-bold text-slate-500 leading-relaxed italic line-clamp-2">
+                                                         {addr.detail_address}, {addr.village_name}, {addr.district_name}, {addr.city_name}
+                                                      </p>
+                                                   </>
+                                                );
+                                             })()
+                                          ) : (
+                                             <p className="text-[10px] font-bold text-rose-500 italic">Silakan pilih atau atur alamat pengiriman.</p>
+                                          )}
+                                       </div></div></div>
+
+                                 {/* 2. Shipping Options Selection */}
+                                 <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                       <div className="flex items-center gap-2">
+                                          <Icons.Truck className="h-4 w-4 text-slate-400" />
+                                          <h3 className="text-[11px] font-black italic uppercase tracking-widest text-slate-900">Opsi Pengiriman</h3>
+                                       </div>
+                                       {isShippingLoading && (
+                                          <div className="flex items-center gap-2 animate-pulse">
+                                             <span className="text-[9px] font-black uppercase tracking-tighter text-primary">Mencari Biaya...</span>
+                                             <Icons.Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                          </div>
+                                       )}
+                                    </div>
+
+                                    <div className="space-y-4">
+                                       {(!shippingRates || shippingRates.length === 0) && !isShippingLoading && (
+                                          <Button
+                                             type="button"
+                                             onClick={handleCheckShipping}
+                                             disabled={!selectedAddressId}
+                                             className="w-full h-14 rounded-2xl bg-white border-2 border-slate-100 hover:border-primary/30 hover:bg-primary/5 text-slate-600 hover:text-primary font-black text-xs uppercase tracking-widest transition-all shadow-sm flex items-center justify-center gap-2 group"
+                                          >
+                                             <Icons.Search className="h-4 w-4 group-hover:scale-110 transition-transform" />
+                                             Cek Biaya Pengiriman Sekarang
+                                          </Button>
+                                       )}
+
+                                       <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+
+                                          {isShippingLoading && (
+                                             <div className="space-y-2">
+                                                {[1, 2, 3].map(i => (
+                                                   <div key={`skeleton-${i}`} className="h-16 w-full bg-white border border-slate-100 rounded-2xl animate-pulse flex items-center px-4 gap-4">
+                                                      <div className="h-10 w-10 bg-slate-100 rounded-xl" />
+                                                      <div className="flex-1 space-y-2">
+                                                         <div className="h-3 w-24 bg-slate-100 rounded" />
+                                                         <div className="h-2 w-16 bg-slate-50 rounded" />
+                                                      </div>
+                                                   </div>
+                                                ))}
+                                             </div>
+                                          )}
+
+                                          {!isShippingLoading && shippingRates && shippingRates.length > 0 && (
+                                             <div className="space-y-2">
+                                                {shippingRates.map((rate, idx) => (
+                                                   <div
+                                                      key={`rate-${rate.courier_code}-${rate.courier_service_code}-${idx}`}
+                                                      onClick={() => setSelectedShipping(rate)}
+                                                      className={`group p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${selectedShipping?.courier_service_code === rate.courier_service_code && selectedShipping?.courier_code === rate.courier_code
+                                                         ? 'bg-primary/5 border-primary shadow-lg shadow-primary/5'
+                                                         : 'bg-white border-slate-50 hover:border-slate-200'
+                                                         }`}
+                                                   >
+                                                      <div className="flex items-center gap-3">
+                                                         <div className="h-10 w-10 rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-100">
+                                                            <img
+                                                               src={rate.courier_logo}
+                                                               alt={rate.courier_name}
+                                                               className="h-full w-full object-contain p-1"
+                                                               onError={(e) => {
+                                                                  e.target.onerror = null;
+                                                                  e.target.src = `https://ui-avatars.com/api/?name=${rate.courier_code}&background=random&color=fff&font-size=0.33`;
+                                                               }}
+                                                            />
+                                                         </div>
+                                                         <div>
+                                                            <p className="text-[11px] font-black text-slate-800 uppercase leading-none mb-1">
+                                                               {rate.courier_name} <span className="text-primary">{rate.courier_service_name}</span>
+                                                            </p>
+                                                            <div className="flex items-center gap-1.5">
+                                                               <Icons.Clock className="h-2.5 w-2.5 text-slate-300" />
+                                                               <p className="text-[9px] font-bold text-slate-400 italic">Estimasi {rate.duration}</p>
+                                                            </div>
+                                                         </div>
+                                                      </div>
+                                                      <div className="text-right">
+                                                         <p className={`text-sm font-black italic ${selectedShipping?.courier_service_code === rate.courier_service_code ? 'text-primary' : 'text-slate-900'}`}>
+                                                            Rp {rate.price.toLocaleString('id-ID')}
+                                                         </p>
+                                                      </div>
+                                                   </div>
+                                                ))}
+                                             </div>
+                                          )}
+
+                                          {!isShippingLoading && (!shippingRates || shippingRates.length === 0) && (
+                                             <div className="p-8 rounded-[2rem] bg-rose-50/50 border border-dashed border-rose-200 text-center space-y-2">
+                                                <Icons.Truck className="h-6 w-6 text-rose-300 mx-auto" />
+                                                <div className="text-[10px] font-bold text-rose-600 italic leading-relaxed">
+                                                   {shippingError || (addresses && addresses.length > 0 ? "Tidak ada layanan pengiriman tersedia untuk alamat ini." : "Pilih alamat terlebih dahulu.")}
+                                                </div>
+                                             </div>
+                                          )}
+                                       </div></div></div>
+                              </div>
+
+                              {/* Price Breakdown Breakdown */}
+                              <div className="pt-8 border-t border-slate-100 space-y-3">
+                                 <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                                    <span>Sewa Kostum ({days} Hari)</span>
+                                    <span>Rp {totalPrice.toLocaleString('id-ID')}</span>
+                                 </div>
+                                 <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                                    <span>Deposit Keamanan (Refundable)</span>
+                                    <span>Rp {deposit.toLocaleString('id-ID')}</span>
+                                 </div>
+                                 {accessoriesTotal > 0 && (
+                                    <div className="flex justify-between items-center text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                                       <span>Aksesoris</span>
+                                       <span>Rp {accessoriesTotal.toLocaleString('id-ID')}</span>
+                                    </div>
+                                 )}
+                                 <div className="flex justify-between items-center text-[11px] font-bold text-primary uppercase tracking-widest">
+                                    <span>Biaya Pengiriman</span>
+                                    {selectedShipping ? (
+                                       <span>Rp {selectedShipping.price.toLocaleString('id-ID')}</span>
+                                    ) : (
+                                       <span className="italic text-[9px] text-slate-400 lowercase font-medium">Pilih kurir...</span>
+                                    )}
                                  </div>
                               </div>
-                              <p className="text-4xl font-black italic text-slate-900 leading-none">
-                                 Rp {grandTotal.toLocaleString('id-ID')}
-                              </p>
+
+                              <div className="pt-6 border-t border-slate-200 mt-6 space-y-8">
+                                 <div className="flex justify-between items-end">
+                                    <div className="space-y-1">
+                                       <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Total Pembayaran</span>
+                                       <div className="flex gap-1">
+                                          <Icons.ShieldCheck className="h-4 w-4 text-emerald-500" />
+                                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">Secure Transaction</span>
+                                       </div>
+                                    </div>
+                                    <p className="text-4xl font-black italic text-slate-900 leading-none">
+                                       Rp {grandTotal.toLocaleString('id-ID')}
+                                    </p>
+                                 </div>
+
+                                 <Form method="post">
+                                    <input type="hidden" name="costume_id" value={costume.id} />
+                                    <input type="hidden" name="start_date" value={date?.from ? format(date.from, "yyyy-MM-dd") : ""} />
+                                    <input type="hidden" name="end_date" value={date?.to ? format(date.to, "yyyy-MM-dd") : ""} />
+                                    <input type="hidden" name="duration_days" value={days} />
+                                    <input type="hidden" name="notes" value={notes} />
+                                    <input
+                                       type="hidden"
+                                       name="shipping_address"
+                                       value={(() => {
+                                          const p = addresses?.find(a => a.id == selectedAddressId);
+                                          if (!p) return "";
+                                          return `${p.receiver_name} | ${p.phone_number} | ${p.detail_address}, ${p.village_name}, ${p.district_name}, ${p.city_name}, ${p.province_name} ${p.postal_code}`;
+                                       })()}
+                                    />
+                                    {selectedShipping && (
+                                       <>
+                                          <input type="hidden" name="courier_name" value={selectedShipping.courier_name} />
+                                          <input type="hidden" name="courier_service" value={selectedShipping.courier_service_name} />
+                                          <input type="hidden" name="shipping_cost" value={selectedShipping.price} />
+                                       </>
+                                    )}
+                                    {selectedAccessories.map(id => (
+                                       <input key={id} type="hidden" name="accessory_ids" value={id} />
+                                    ))}
+
+                                    {showManualPay && actionData?.snap_token && (
+                                       <Button
+                                          type="button"
+                                          onClick={() => {
+                                             window.snap.pay(actionData.snap_token, {
+                                                onClose: () => setShowManualPay(true),
+                                                onSuccess: () => navigate("/dashboard")
+                                             });
+                                          }}
+                                          className="w-full h-18 mb-4 rounded-[1.8rem] bg-blue-600 hover:bg-blue-700 text-white font-black text-xl shadow-2xl animate-bounce"
+                                       >
+                                          Buka Jendela Pembayaran
+                                          <Icons.ExternalLink className="ml-2 h-6 w-6" />
+                                       </Button>
+                                    )}
+
+                                    {actionData?.error && (
+                                       <div className="mb-4 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold flex items-center gap-3">
+                                          <Icons.AlertTriangle className="h-5 w-5 shrink-0" />
+                                          <p>{actionData.error}</p>
+                                       </div>
+                                    )}
+
+                                    <Button
+                                       type="submit"
+                                       disabled={!date?.from || !date?.to || !isVerified || !selectedShipping || navigation.state === "submitting"}
+                                       className={`w-full h-18 rounded-[1.8rem] transition-all text-white font-black text-xl shadow-2xl group ${!date?.from || !date?.to || !isVerified || !selectedShipping || navigation.state === "submitting"
+                                          ? 'bg-slate-300 cursor-not-allowed shadow-none'
+                                          : 'bg-slate-900 hover:bg-primary shadow-slate-900/20'
+                                          }`}
+                                    >
+                                       {navigation.state === "submitting" ? (
+                                          <>
+                                             <Icons.Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                                             Memproses...
+                                          </>
+                                       ) : isVerified ? (
+                                          <>
+                                             Bayar Sekarang
+                                             <Icons.ChevronRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
+                                          </>
+                                       ) : (
+                                          <>
+                                             <Icons.Lock className="mr-2 h-6 w-6" />
+                                             Verifikasi Diperlukan
+                                          </>
+                                       )}
+                                    </Button>
+                                 </Form>
+                              </div>
                            </div>
+                        </div>
 
-                           <Form method="post">
-                              <input type="hidden" name="costume_id" value={costume.id} />
-                              <input type="hidden" name="start_date" value={date?.from ? format(date.from, "yyyy-MM-dd") : ""} />
-                              <input type="hidden" name="end_date" value={date?.to ? format(date.to, "yyyy-MM-dd") : ""} />
-                              <input type="hidden" name="duration_days" value={days} />
-                              <input type="hidden" name="notes" value={notes} />
-                              <input 
-                                 type="hidden" 
-                                 name="shipping_address" 
-                                 value={(() => {
-                                    const p = addresses?.find(a => a.is_primary);
-                                    if (!p) return "";
-                                    return `${p.receiver_name} | ${p.phone_number} | ${p.detail_address}, ${p.village_name}, ${p.district_name}, ${p.city_name}, ${p.province_name} ${p.postal_code}`;
-                                 })()} 
-                              />
-                               {selectedAccessories.map(id => (
-                                  <input key={id} type="hidden" name="accessory_ids" value={id} />
-                               ))}
+                     </div>
+                  </div>
 
-                              {showManualPay && actionData?.snap_token && (
-                                 <Button
-                                    type="button"
-                                    onClick={() => {
-                                       window.snap.pay(actionData.snap_token, {
-                                          onClose: () => setShowManualPay(true),
-                                          onSuccess: () => navigate("/dashboard")
-                                       });
-                                    }}
-                                    className="w-full h-18 mb-4 rounded-[1.8rem] bg-blue-600 hover:bg-blue-700 text-white font-black text-xl shadow-2xl animate-bounce"
-                                 >
-                                    Buka Jendela Pembayaran
-                                    <Icons.ExternalLink className="ml-2 h-6 w-6" />
-                                 </Button>
-                              )}
+                  {/* Card Footer Trust Section */}
+                  <div className="bg-slate-100/80 backdrop-blur-md px-6 sm:px-10 py-5 border-t border-slate-100 flex flex-col lg:flex-row items-center justify-between gap-5">
+                     <div className="flex items-center gap-3 text-slate-500">
+                        <div className="h-7 w-7 rounded-full bg-slate-200/50 flex items-center justify-center shrink-0 border border-slate-200/50">
+                           <Icons.Lock className="h-3.5 w-3.5 text-slate-600" />
+                        </div>
+                        <p className="text-[11px] sm:text-xs font-medium">
+                           Pembayaran Anda dijamin aman & terenkripsi oleh <span className="font-bold text-slate-700">Midtrans</span>.
+                        </p>
+                     </div>
 
-                              <Button
-                                 type="submit"
-                                 disabled={!date?.from || !date?.to || !isVerified || navigation.state === "submitting"}
-                                 className={`w-full h-18 rounded-[1.8rem] transition-all text-white font-black text-xl shadow-2xl group ${!isVerified || navigation.state === "submitting"
-                                       ? 'bg-slate-300 cursor-not-allowed shadow-none'
-                                       : 'bg-slate-900 hover:bg-primary shadow-slate-900/20'
-                                    }`}
-                              >
-                                 {navigation.state === "submitting" ? (
-                                    <>
-                                       <Icons.Loader2 className="mr-2 h-6 w-6 animate-spin" />
-                                       Memproses...
-                                    </>
-                                 ) : isVerified ? (
-                                    <>
-                                       Bayar Sekarang
-                                       <Icons.ChevronRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
-                                    </>
-                                 ) : (
-                                    <>
-                                       <Icons.Lock className="mr-2 h-6 w-6" />
-                                       Verifikasi Diperlukan
-                                    </>
-                                 )}
-                              </Button>
-                           </Form>
+                     <div className="flex items-center gap-4 sm:gap-6">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                           <Icons.Zap className="h-4 w-4 text-amber-500" />
+                           <span className="text-[11px] sm:text-xs font-bold text-slate-700">Proses Instan</span>
+                        </div>
+                        <div className="h-3 w-[1px] bg-slate-200"></div>
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                           <Icons.RefreshCcw className="h-4 w-4 text-emerald-500" />
+                           <span className="text-[11px] sm:text-xs font-bold text-slate-700">Refund 100%</span>
                         </div>
                      </div>
                   </div>
 
-                  {/* 3. Footer Trust Section */}
-                  <div className="bg-slate-900 p-6 flex flex-col sm:flex-row items-center justify-center gap-8 text-white/50">
-                     <div className="flex items-center gap-3">
-                        <Icons.Zap className="h-4 w-4 text-amber-400" />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Proses Instan</span>
-                     </div>
-                     <div className="h-4 w-[1px] bg-white/10 hidden sm:block"></div>
-                     <div className="flex items-center gap-3">
-                        <Icons.RefreshCcw className="h-4 w-4 text-emerald-400" />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Refund Deposit 100%</span>
-                     </div>
-                     <div className="h-4 w-[1px] bg-white/10 hidden sm:block"></div>
-                     <div className="flex items-center gap-3">
-                        <Icons.ShieldCheck className="h-4 w-4 text-blue-400" />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Midtrans Secured</span>
-                     </div>
-                  </div>
                </div>
-
-               <p className="text-center mt-10 text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed px-10">
-                  Pembayaran akan diproses secara aman melalui <span className="text-slate-900">Midtrans Snap</span>. Semua data Anda terenkripsi.
-               </p>
-
             </div>
          </main>
-
          <Footer />
-
-         {/* Date Validation Alert Modal */}
-         <Dialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <DialogContent className="sm:max-w-md p-0 overflow-hidden bg-white rounded-[3rem] border-none shadow-2xl">
-               <div className="p-10 flex flex-col items-center text-center space-y-6">
-                  <div className="h-20 w-20 bg-rose-500 rounded-full flex items-center justify-center shadow-lg shadow-rose-200 shrink-0">
-                     <Icons.AlertTriangle className="h-10 w-10 text-white" />
-                  </div>
-                  <div className="space-y-2">
-                     <DialogTitle className="text-xl font-bold text-slate-900">Durasi Kurang dari 3 Hari</DialogTitle>
-                     <DialogDescription className="text-sm text-slate-500">
-                        Peringatan: Minimal durasi penyewaan kostum adalah <strong className="text-slate-900">3 hari</strong>. Sistem akan secara otomatis membulatkan perhitungan biaya untuk 3 hari sewa.
-                     </DialogDescription>
-                  </div>
-                  <Button onClick={() => setIsAlertOpen(false)} className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm">
-                     Saya Mengerti
-                  </Button>
-               </div>
-            </DialogContent>
-         </Dialog>
-      </div>
+      </div >
    );
 }
+
+
+
+
+

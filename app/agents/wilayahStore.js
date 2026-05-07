@@ -21,5 +21,7 @@ export const initialWilayahState = {
     regency: "",
     district: "",
     village: ""
-  }
+  },
+  latitude: null,
+  longitude: null
 };

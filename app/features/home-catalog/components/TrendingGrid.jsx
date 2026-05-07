@@ -20,10 +20,10 @@ export function TrendingGrid({ costumes = [] }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
         {displayCostumes.map((outfit) => {
-          const imageUrl = outfit.image?.startsWith('http') 
-            ? outfit.image 
-            : outfit.images?.[0]?.image_path 
-              ? `http://127.0.0.1:8000/storage/${outfit.images[0].image_path}`
+          const imageUrl = outfit.image?.startsWith('http')
+            ? outfit.image
+            : outfit.images?.[0]?.image_path
+              ? `${outfit.images[0].image_path}`
               : outfit.image || "/placeholder-costume.jpg";
 
           const price = outfit.rental_price || outfit.price || 0;

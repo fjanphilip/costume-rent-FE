@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, useActionData, Form, useNavigation, useSubmit, useSearchParams } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useNavigation, useSubmit, useSearchParams, Link } from "@remix-run/react";
 import { getSession } from "~/lib/session.server";
 import * as Icons from "lucide-react";
 import { getApiClient } from "~/lib/api";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
-import { WilayahAgent } from "~/agents/wilayahAgent";
 
 export const loader = async ({ request }) => {
   const session = await getSession(request);
@@ -65,52 +63,6 @@ export const action = async ({ request }) => {
       await client.put("/user/profile", { password, password_confirmation });
       return json({ success: "Password berhasil diperbarui." });
     }
-
-    if (intent === "add_address") {
-      const data = {
-        label: formData.get("label"),
-        receiver_name: formData.get("receiver_name"),
-        phone_number: formData.get("phone_number"),
-        province_code: formData.get("province_code"),
-        province_name: formData.get("province_name"),
-        city_code: formData.get("city_code"),
-        city_name: formData.get("city_name"),
-        district_code: formData.get("district_code"),
-        district_name: formData.get("district_name"),
-        village_code: formData.get("village_code"),
-        village_name: formData.get("village_name"),
-        postal_code: formData.get("postal_code"),
-        detail_address: formData.get("detail_address"),
-        is_primary: formData.get("is_primary") === "on"
-      };
-
-      await client.post("/user/addresses", data);
-      return json({ success: "Alamat berhasil ditambahkan." });
-    }
-
-    if (intent === "edit_address") {
-      const id = formData.get("address_id");
-      const data = {
-        label: formData.get("label"),
-        receiver_name: formData.get("receiver_name"),
-        phone_number: formData.get("phone_number"),
-        province_code: formData.get("province_code"),
-        province_name: formData.get("province_name"),
-        city_code: formData.get("city_code"),
-        city_name: formData.get("city_name"),
-        district_code: formData.get("district_code"),
-        district_name: formData.get("district_name"),
-        village_code: formData.get("village_code"),
-        village_name: formData.get("village_name"),
-        postal_code: formData.get("postal_code"),
-        detail_address: formData.get("detail_address"),
-        is_primary: formData.get("is_primary") === "on"
-      };
-
-      await client.put(`/user/addresses/${id}`, data);
-      return json({ success: "Alamat berhasil diperbarui." });
-    }
-
     if (intent === "set_primary") {
       const id = formData.get("address_id");
       await client.patch(`/user/addresses/${id}/primary`);
@@ -134,73 +86,16 @@ export const action = async ({ request }) => {
 
 
 export default function SettingsPage() {
-  const { user, addresses, token } = useLoaderData();
+  const { user, addresses } = useLoaderData();
   const actionData = useActionData();
   const navigation = useNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "personal");
-  const [isAddAddressOpen, setIsAddAddressOpen] = useState(false);
-  const [editingAddress, setEditingAddress] = useState(null);
   const submit = useSubmit();
-
-  // Wilayah Agent Integration
-  const [wilayahState, setWilayahState] = useState(WilayahAgent.initialState);
-  const wilayahActions = WilayahAgent.useActions(wilayahState, (update) => {
-    setWilayahState(prev => ({ ...prev, ...(typeof update === 'function' ? update(prev) : update) }));
-  });
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
     setSearchParams({ tab: tabId }, { replace: true });
-    if (tabId === "address" && wilayahState.provinces.length === 0) {
-      wilayahActions.fetchProvinsi();
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === "address" && wilayahState.provinces.length === 0) {
-      wilayahActions.fetchProvinsi();
-    }
-  }, [activeTab]);
-
-  const openEditModal = async (addr) => {
-    setEditingAddress(addr);
-    
-    // Pre-fill wilayah store for editing
-    wilayahActions.setRegionData({
-      selectedCodes: {
-        province: addr.province_code || "",
-        regency: addr.city_code || "",
-        district: addr.district_code || "",
-        village: addr.village_code || ""
-      },
-      selectedNames: {
-        province: addr.province_name || "",
-        regency: addr.city_name || "",
-        district: addr.district_name || "",
-        village: addr.village_name || ""
-      }
-    });
-    
-    // We only fetch lists if we have the parent codes
-    if (addr.province_code) {
-      const client = getApiClient(token);
-      try {
-        const promises = [client.get(`/wilayah/regencies/${addr.province_code}`)];
-        if (addr.city_code) promises.push(client.get(`/wilayah/districts/${addr.city_code}`));
-        if (addr.district_code) promises.push(client.get(`/wilayah/villages/${addr.district_code}`));
-
-        const results = await Promise.all(promises);
-        
-        wilayahActions.setRegionData({
-          regencies: results[0]?.data?.data || [],
-          districts: results[1]?.data?.data || [],
-          villages: results[2]?.data?.data || []
-        });
-      } catch (e) { console.error("Fetch wilayah failed:", e); }
-    }
-    
-    setIsAddAddressOpen(true);
   };
 
   // Security Validation States
@@ -210,8 +105,6 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (actionData?.success) {
-      setIsAddAddressOpen(false);
-      setEditingAddress(null);
       setPassword("");
       setConfirmPassword("");
     }
@@ -264,8 +157,8 @@ export default function SettingsPage() {
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={`w-full flex items-start gap-4 p-4 rounded-2xl transition-all text-left ${isActive
-                    ? "bg-white border-2 border-primary shadow-lg shadow-primary/5"
-                    : "bg-transparent border-2 border-transparent hover:bg-white hover:border-slate-100 text-slate-500"
+                  ? "bg-white border-2 border-primary shadow-lg shadow-primary/5"
+                  : "bg-transparent border-2 border-transparent hover:bg-white hover:border-slate-100 text-slate-500"
                   }`}
               >
                 <div className={`mt-0.5 p-2 rounded-xl ${isActive ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-400'}`}>
@@ -459,8 +352,8 @@ export default function SettingsPage() {
                   type="submit"
                   disabled={navigation.state === "submitting" || !passwordMatch || password.length < 8}
                   className={`w-full h-14 rounded-2xl text-white font-black uppercase tracking-widest text-xs mt-4 transition-all ${passwordMatch && password.length >= 8
-                      ? 'bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-600/20'
-                      : 'bg-slate-300 cursor-not-allowed'
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-600/20'
+                    : 'bg-slate-300 cursor-not-allowed'
                     }`}
                 >
                   {navigation.state === "submitting" ? "Menyimpan..." : "Update Password"}
@@ -483,155 +376,11 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <Dialog open={isAddAddressOpen} onOpenChange={closeAddressModal}>
-                  <DialogTrigger asChild>
-                    <Button className="rounded-2xl h-12 px-6 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-[10px] flex gap-2 shadow-lg shadow-primary/20">
-                      <Icons.Plus className="h-4 w-4" /> Tambah Alamat
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl">
-                    <div className="p-8 sm:p-12 space-y-8">
-                      <div className="flex flex-col gap-2">
-                        <h3 className="text-2xl font-black italic uppercase tracking-tighter text-slate-900">
-                          {editingAddress ? "Edit Alamat" : "Alamat Baru"}
-                        </h3>
-                        <p className="text-sm font-medium text-slate-400 italic">Pastikan informasi alamat lengkap dan benar.</p>
-                      </div>
-
-                      <Form method="post" className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <input type="hidden" name="intent" value={editingAddress ? "edit_address" : "add_address"} />
-                        {editingAddress && <input type="hidden" name="address_id" value={editingAddress.id} />}
-                        
-                        {/* Hidden Inputs for Region Names (captured in WilayahAgent) */}
-                        <input type="hidden" name="province_name" value={wilayahState.selectedNames.province} />
-                        <input type="hidden" name="city_name" value={wilayahState.selectedNames.regency} />
-                        <input type="hidden" name="district_name" value={wilayahState.selectedNames.district} />
-                        <input type="hidden" name="village_name" value={wilayahState.selectedNames.village} />
-                        
-                        <input type="hidden" name="province_code" value={wilayahState.selectedCodes.province} />
-                        <input type="hidden" name="city_code" value={wilayahState.selectedCodes.regency} />
-                        <input type="hidden" name="district_code" value={wilayahState.selectedCodes.district} />
-                        <input type="hidden" name="village_code" value={wilayahState.selectedCodes.village} />
-
-                        <div className="md:col-span-2 space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Label Alamat</label>
-                          <input name="label" defaultValue={editingAddress?.label || ""} required placeholder="Contoh: Rumah, Kantor, Kos" className="w-full h-12 px-5 rounded-xl bg-slate-50 border border-slate-100 font-bold" />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Nama Penerima</label>
-                          <input name="receiver_name" defaultValue={editingAddress?.receiver_name || ""} required minLength={3} className="w-full h-12 px-5 rounded-xl bg-slate-50 border border-slate-100 font-bold" />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Nomor HP</label>
-                          <input
-                            name="phone_number"
-                            defaultValue={editingAddress?.phone_number || ""}
-                            required
-                            type="tel"
-                            pattern="[0-9]*"
-                            minLength={10}
-                            maxLength={15}
-                            onInput={(e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ''); }}
-                            className="w-full h-12 px-5 rounded-xl bg-slate-50 border border-slate-100 font-bold"
-                          />
-                        </div>
-
-                        {/* Wilayah Chained Dropdowns */}
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Provinsi</label>
-                          <select 
-                            className="w-full h-12 px-5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm"
-                            onChange={(e) => wilayahActions.fetchKota(e.target.value)}
-                            value={wilayahState.selectedCodes.province}
-                            required
-                          >
-                            <option value="">Pilih Provinsi</option>
-                            {wilayahState.provinces.map(p => <option key={p.code} value={p.code}>{p.name}</option>)}
-                          </select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Kota / Kabupaten</label>
-                          <select 
-                            className="w-full h-12 px-5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm disabled:opacity-50"
-                            disabled={!wilayahState.selectedCodes.province || wilayahState.isLoading}
-                            onChange={(e) => wilayahActions.fetchKecamatan(e.target.value)}
-                            value={wilayahState.selectedCodes.regency}
-                            required
-                          >
-                            <option value="">Pilih Kota</option>
-                            {wilayahState.regencies.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
-                          </select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Kecamatan</label>
-                          <select 
-                            className="w-full h-12 px-5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm disabled:opacity-50"
-                            disabled={!wilayahState.selectedCodes.regency || wilayahState.isLoading}
-                            onChange={(e) => wilayahActions.fetchDesa(e.target.value)}
-                            value={wilayahState.selectedCodes.district}
-                            required
-                          >
-                            <option value="">Pilih Kecamatan</option>
-                            {wilayahState.districts.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
-                          </select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Desa / Kelurahan</label>
-                          <select 
-                            className="w-full h-12 px-5 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm disabled:opacity-50"
-                            disabled={!wilayahState.selectedCodes.district || wilayahState.isLoading}
-                            onChange={(e) => wilayahActions.setSelectedVillage(e.target.value)}
-                            value={wilayahState.selectedCodes.village}
-                            required
-                          >
-                            <option value="">Pilih Desa</option>
-                            {wilayahState.villages.map(v => <option key={v.code} value={v.code}>{v.name}</option>)}
-                          </select>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Kode Pos</label>
-                          <input
-                            name="postal_code"
-                            defaultValue={editingAddress?.postal_code || ""}
-                            required
-                            pattern="[0-9]*"
-                            maxLength={5}
-                            minLength={5}
-                            onInput={(e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ''); }}
-                            className="w-full h-12 px-5 rounded-xl bg-slate-50 border border-slate-100 font-bold"
-                          />
-                        </div>
-
-                        <div className="md:col-span-2 space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Detail Alamat (Jalan, No. Rumah, Patokan)</label>
-                          <textarea name="detail_address" defaultValue={editingAddress?.detail_address || ""} required minLength={10} className="w-full min-h-[100px] p-5 rounded-xl bg-slate-50 border border-slate-100 font-bold resize-none" placeholder="Contoh: Jl. Mangga No. 12, Samping Masjid" />
-                        </div>
-
-                        <div className="md:col-span-2 flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                          <input type="checkbox" name="is_primary" id="is_primary" defaultChecked={editingAddress?.is_primary || false} className="h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary" />
-                          <label htmlFor="is_primary" className="text-sm font-bold text-slate-700">Jadikan Alamat Utama</label>
-                        </div>
-
-                        <div className="md:col-span-2 pt-4 flex gap-4">
-                          {editingAddress && (
-                            <Button type="button" onClick={() => closeAddressModal(false)} variant="outline" className="flex-1 h-14 rounded-2xl text-slate-600 font-black uppercase tracking-widest border-slate-200">
-                              Batal
-                            </Button>
-                          )}
-                          <Button type="submit" className="flex-1 h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest shadow-lg shadow-slate-900/20">
-                            {navigation.state === "submitting" ? "Menyimpan..." : "Simpan Alamat"}
-                          </Button>
-                        </div>
-                      </Form>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <Link to="/dashboard/address/new">
+                  <Button className="rounded-2xl h-12 px-6 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-[10px] flex gap-2 shadow-lg shadow-primary/20">
+                    <Icons.Plus className="h-4 w-4" /> Tambah Alamat
+                  </Button>
+                </Link>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
@@ -665,14 +414,15 @@ export default function SettingsPage() {
                       </div>
 
                       <div className="pt-6 flex flex-wrap items-center gap-2 mt-auto">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => openEditModal(addr)}
-                          className="text-[9px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-100 h-8 px-3"
-                        >
-                          Edit
-                        </Button>
+                        <Link to={`/dashboard/address/${addr.id}`}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-[9px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-100 h-8 px-3"
+                          >
+                            Edit
+                          </Button>
+                        </Link>
                         {!addr.is_primary && (
                           <>
                             <Button

@@ -41,6 +41,7 @@ export const loader = async ({ request }) => {
 
     return json({ 
       user: latestUser, 
+      token,
       costume, 
       addresses,
       bookedDates,
@@ -66,6 +67,9 @@ export const action = async ({ request }) => {
   const payment_method = "midtrans";
   const notes = formData.get("notes") || "";
   const shipping_address = formData.get("shipping_address");
+  const shipping_cost = formData.get("shipping_cost");
+  const courier_name = formData.get("courier_name");
+  const courier_service = formData.get("courier_service");
 
   const client = getApiClient(token);
 
@@ -87,6 +91,9 @@ export const action = async ({ request }) => {
       accessory_ids: accessory_ids.map(id => id.toString()),
       payment_method,
       shipping_address,
+      shipping_cost: parseFloat(shipping_cost),
+      courier_name,
+      courier_service,
       notes
     });
 
