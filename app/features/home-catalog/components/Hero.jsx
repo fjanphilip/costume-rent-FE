@@ -21,7 +21,7 @@ export function Hero() {
           </div>
           <h1 className="text-4xl md:text-6xl font-black tracking-tight leading-[1.1]">
             New Anime <br />
-            <span className="text-primary italic">Season Arrivals</span>
+            <span className="text-primary text-white italic">Season Arrivals</span>
           </h1>
           <p className="text-white/80 text-sm md:text-lg max-w-md">
             Siapkan dirimu untuk musim baru anime! Dapatkan koleksi kostum terbaru dengan kualitas premium dan detail yang akurat.

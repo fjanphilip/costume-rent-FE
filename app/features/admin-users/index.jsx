@@ -145,7 +145,8 @@ export default function AdminUsersFeature({ users: initialUsers }) {
       </div>
 
       <Card className="border border-slate-200 shadow-sm rounded-2xl overflow-hidden bg-white">
-        <div className="overflow-x-auto">
+        {/* Desktop View */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -216,6 +217,81 @@ export default function AdminUsersFeature({ users: initialUsers }) {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="lg:hidden divide-y divide-slate-100 bg-white">
+          {filteredUsers.length > 0 ? filteredUsers.map((user) => {
+            const bankLogo = getBankLogo(user.bank_name);
+            return (
+              <div key={user.id} className="p-6 space-y-4 text-left">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 border border-slate-200 shrink-0">
+                      <Icons.User className="h-5 w-5" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-bold text-slate-900 truncate leading-snug">{user.name}</span>
+                      <span className="text-[11px] font-medium text-slate-500 truncate mt-0.5">{user.email}</span>
+                      <Badge className="w-fit mt-1 bg-slate-100 text-slate-800 text-[8px] font-bold tracking-wider rounded border border-slate-200">
+                        {user.role.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Switch 
+                      checked={!!user.is_verified} 
+                      onCheckedChange={() => handleToggleVerify(user)}
+                      disabled={fetcher.state !== "idle"}
+                    />
+                    <Badge variant="outline" className={`border-none font-bold text-[9px] rounded-lg px-2 py-0.5 tracking-wider ${
+                      user.is_verified ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                    }`}>
+                      {user.is_verified ? 'VERIFIED' : 'PENDING'}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                  <div className="space-y-1">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Financial Account</p>
+                    {user.bank_account_number ? (
+                      <div className="flex items-center gap-2.5 mt-1">
+                        <div className="h-7 w-7 bg-white border border-slate-200 rounded flex items-center justify-center p-1 shadow-xs shrink-0">
+                          {bankLogo ? (
+                            <img src={bankLogo} alt="" className="h-full w-full object-contain" />
+                          ) : (
+                            <Icons.CreditCard className="h-3.5 w-3.5 text-slate-300" />
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-800 text-[11px] leading-none">{user.bank_account_number}</span>
+                          <span className="text-[9px] text-slate-400 font-medium uppercase mt-0.5 truncate max-w-[150px]">A/N {user.bank_account_name}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300 italic font-medium">Not Provided</span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 justify-end sm:justify-start">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditClick(user)} className="h-9 w-9 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg border bg-white shadow-xs">
+                      <Icons.Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(user)} className="h-9 w-9 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border bg-white shadow-xs">
+                      <Icons.Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          }) : (
+            <div className="p-16 text-center text-slate-400 font-bold italic text-sm">
+              <Icons.Inbox className="h-12 w-12 mx-auto mb-3 opacity-20" />
+              Tidak ada pengguna
+            </div>
+          )}
         </div>
       </Card>
 

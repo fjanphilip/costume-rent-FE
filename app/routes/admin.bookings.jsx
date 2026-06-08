@@ -172,17 +172,18 @@ export default function AdminBookingsPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#F8FAFC]">
       <AdminSidebar />
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto px-6 py-10 space-y-10 max-w-7xl text-left">
+        <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-10 max-w-7xl text-left">
           <div className="flex flex-col gap-1">
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Manajemen Penyewaan</h1>
             <p className="text-slate-500">Pantau dan kelola semua transaksi penyewaan kostum.</p>
           </div>
 
           <Card className="border border-slate-200 shadow-sm rounded-[2rem] overflow-hidden bg-white">
-            <div className="overflow-x-auto">
+            {/* Desktop View */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -443,6 +444,183 @@ export default function AdminBookingsPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile View */}
+            <div className="lg:hidden divide-y divide-slate-100 bg-white">
+              {bookings.length > 0 ? bookings.map((booking) => {
+                const totalFee = Number(booking.total_rental_fee) +
+                  Number(booking.locked_deposit_amount) +
+                  Number(booking.shipping_cost || 0) +
+                  (booking.accessories?.reduce((sum, acc) => sum + Number(acc.pivot?.price_at_booking || acc.rental_price), 0) || 0) +
+                  (Number(booking.total_fine) || 0);
+
+                return (
+                  <div key={booking.id} className="p-6 space-y-4 text-left">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-slate-900 leading-snug">{booking.booking_code}</span>
+                        <span className="text-[11px] font-semibold text-slate-500 mt-0.5">{booking.user?.name}</span>
+                      </div>
+                      <div className="relative group/select shrink-0">
+                        <select
+                          value={booking.status}
+                          onChange={(e) => handleStatusChange(booking, e.target.value)}
+                          disabled={fetcher.state !== 'idle'}
+                          className={`appearance-none cursor-pointer border-none font-bold text-[9px] rounded-lg px-2.5 py-1.5 tracking-wider shadow-sm outline-none pr-7 ${getStatusColor(booking.status, booking)}`}
+                        >
+                          {BOOKING_STATUSES.map(status => (
+                            <option key={status} value={status} className="bg-white text-slate-900 font-bold uppercase py-2">
+                              {status.replace('_', ' ').toUpperCase()}
+                            </option>
+                          ))}
+                        </select>
+                        <Icons.ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 pointer-events-none opacity-50" />
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col gap-3 text-xs">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-0.5">
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Costume</p>
+                          <p className="font-semibold text-slate-800 leading-tight">{booking.costume?.name}</p>
+                        </div>
+                        <div className="space-y-0.5 text-right">
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Rental Period</p>
+                          <p className="font-semibold text-slate-700 leading-none">{formatDate(booking.start_date)}</p>
+                          <p className="text-[9px] text-slate-400 mt-0.5">s/d {formatDate(booking.end_date)}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-100/50">
+                        <div className="space-y-0.5">
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Resi / Tracking</p>
+                          {editingTracking === booking.id ? (
+                            <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border mt-1">
+                              <Input
+                                value={tempTracking}
+                                onChange={(e) => setTempTracking(e.target.value)}
+                                placeholder="Resi..."
+                                className="h-7 text-[10px] rounded border-slate-200 bg-white w-20"
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                className="h-7 w-7 rounded p-0 bg-emerald-500 hover:bg-emerald-600"
+                                onClick={() => handleSaveTracking(booking)}
+                              >
+                                <Icons.Check className="h-3.5 w-3.5 text-white" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 rounded p-0 text-rose-500 hover:bg-rose-50"
+                                onClick={() => setEditingTracking(null)}
+                              >
+                                <Icons.X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[9px] font-bold text-primary bg-primary/5 px-2 py-0.5 rounded border border-primary/10 uppercase truncate max-w-[120px]">
+                                {booking.tracking_number || "Belum Ada Resi"}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setEditingTracking(booking.id);
+                                  setTempTracking(booking.tracking_number || "");
+                                }}
+                                className="p-1 hover:bg-primary hover:text-white bg-white text-slate-400 rounded border transition-all active:scale-95 shadow-xs"
+                              >
+                                <Icons.Edit3 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-0.5 text-right">
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Fee</p>
+                          <p className="font-extrabold text-slate-900 text-sm">Rp {totalFee.toLocaleString('id-ID')}</p>
+                        </div>
+                      </div>
+
+                      {booking.return_tracking_number && (
+                        <div className="bg-purple-50/50 border border-purple-100 p-3 rounded-xl flex items-center justify-between mt-1">
+                          <div className="space-y-0.5">
+                            <p className="text-[9px] font-black uppercase text-purple-600 tracking-wider">Resi Balik</p>
+                            <p className="font-mono text-purple-700 text-[10px]">{booking.return_tracking_number}</p>
+                          </div>
+                          {booking.return_proof_image && (
+                            <a
+                              href={`${booking.return_proof_image}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="h-10 w-10 rounded overflow-hidden border border-white shadow-xs shrink-0"
+                            >
+                              <img src={`${booking.return_proof_image}`} className="w-full h-full object-cover" alt="Return Proof" />
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 justify-end items-center pt-1 w-full">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg h-9 px-4 text-xs font-semibold border hover:bg-slate-900 hover:text-white transition-all flex-1 sm:flex-none"
+                        onClick={() => setSelectedBookingDetail(booking)}
+                      >
+                        <Icons.Eye className="h-4 w-4 mr-2" /> Detail Kirim
+                      </Button>
+
+                      {booking.status === 'Returned' && !booking.returned_at && (
+                        <Button
+                          size="sm"
+                          className="bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] uppercase rounded-xl h-9 px-4 italic tracking-widest shadow-md flex-1 sm:flex-none"
+                          onClick={() => {
+                            setVerifyingBooking(booking.id);
+                            setFineAmount(0);
+                            setFineReason("");
+                            setDamageFile(null);
+                            setPreviewUrl(null);
+                          }}
+                        >
+                          <Icons.ShieldCheck className="h-4 w-4 mr-2" /> Verify Return
+                        </Button>
+                      )}
+
+                      {booking.status === 'Returned' && booking.returned_at && (
+                        <div className="flex gap-2 w-full sm:w-auto">
+                          {Number(booking.total_fine) > Number(booking.locked_deposit_amount) ? (
+                            <div className="bg-rose-50 border border-rose-100 px-3 py-1.5 rounded-xl flex items-center justify-between w-full text-xs">
+                              <span className="text-[9px] font-black text-rose-600 uppercase">Kurang: Rp {(Number(booking.total_fine) - Number(booking.locked_deposit_amount)).toLocaleString('id-ID')}</span>
+                              <span className="text-[8px] text-rose-400 italic font-medium">Menunggu Pelunasan...</span>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase rounded-xl h-9 px-4 italic tracking-widest shadow-md flex-1 w-full"
+                              onClick={() => {
+                                if (confirm('Konfirmasi bahwa sisa deposit sudah ditransfer manual?')) {
+                                  fetcher.submit({ intent: 'confirm_payment', id: booking.id }, { method: 'post' });
+                                }
+                              }}
+                            >
+                              <Icons.DollarSign className="h-4 w-4 mr-2" /> Confirm Refund
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div className="p-16 text-center text-slate-400 font-bold italic text-sm">
+                  <Icons.ShoppingBag className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  Belum ada penyewaan
+                </div>
+              )}
             </div>
           </Card>
         </div>

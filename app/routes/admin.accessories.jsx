@@ -131,17 +131,17 @@ export default function AdminAccessoriesPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#F8FAFC]">
       <AdminSidebar />
       <main className="flex-1 overflow-auto text-left">
-        <div className="container mx-auto px-6 py-10 space-y-10 max-w-7xl">
-          <div className="flex justify-between items-end">
+        <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-10 max-w-7xl">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
             <div className="flex flex-col gap-1">
               <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Manajemen Aksesoris</h1>
-              <p className="text-slate-500">Kelola wig, sepatu, senjata, dan perlengkapan kostum lainnya.</p>
+              <p className="text-slate-500 text-sm">Kelola wig, sepatu, senjata, dan perlengkapan kostum lainnya.</p>
             </div>
             <Button
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl h-12 px-6 shadow-lg shadow-slate-900/10"
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl h-12 px-6 shadow-lg shadow-slate-900/10 w-full sm:w-auto justify-center"
               onClick={handleOpenAdd}
             >
               <Icons.Plus className="h-4 w-4 mr-2" /> Tambah Aksesoris
@@ -155,12 +155,12 @@ export default function AdminAccessoriesPage() {
             </div>
           )}
 
-          <div className="flex items-center gap-4">
-            <form onSubmit={handleSearch} className="flex-1 max-w-md relative">
+          <div className="flex items-center gap-4 w-full">
+            <form onSubmit={handleSearch} className="flex-1 max-w-md relative w-full">
               <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input 
                 placeholder="Cari aksesoris atau brand..." 
-                className="pl-10 h-11 rounded-xl border-slate-200"
+                className="pl-10 h-11 rounded-xl border-slate-200 w-full"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -168,7 +168,8 @@ export default function AdminAccessoriesPage() {
           </div>
 
           <Card className="border border-slate-200 shadow-sm rounded-[2rem] overflow-hidden bg-white">
-            <div className="overflow-x-auto">
+            {/* Desktop View */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -249,6 +250,86 @@ export default function AdminAccessoriesPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile View */}
+            <div className="lg:hidden divide-y divide-slate-100 bg-white">
+              {accessories.length > 0 ? accessories.map((item) => (
+                <div key={item.id} className="p-6 space-y-4 text-left">
+                  <div className="flex items-center gap-4">
+                    <div className="h-14 w-12 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
+                      {item.image_path ? (
+                        <img src={item.image_path} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center bg-slate-50 text-slate-300">
+                          <Icons.Image className="h-5 w-5" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-sm text-slate-900 truncate leading-snug">{item.name}</h4>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{item.brand}</p>
+                      <Badge className="rounded-full px-2 py-0 mt-1 text-[8px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border-none w-fit">
+                        {item.category}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col gap-3 text-xs">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Harga Sewa</p>
+                        <p className="font-extrabold text-sm text-slate-800">Rp {Number(item.rental_price).toLocaleString('id-ID')}</p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Stok</p>
+                        <p className={`font-bold text-xs ${item.stock > 0 ? 'text-slate-800' : 'text-rose-500'}`}>{item.stock} set</p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-end pt-2 border-t border-slate-100/50">
+                      <div className="space-y-1">
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Terkait Kostum</p>
+                        <div className="flex flex-wrap gap-1 max-w-[150px]">
+                          {item.costumes?.map(c => (
+                            <Badge key={c.id} variant="outline" className="text-[8px] px-1 py-0 border-slate-200 text-slate-500">
+                              {c.name}
+                            </Badge>
+                          ))}
+                          {(!item.costumes || item.costumes.length === 0) && (
+                            <span className="text-[9px] text-slate-400 italic">Global (Semua)</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-lg hover:bg-slate-100 border bg-white shadow-xs text-slate-500"
+                          onClick={() => handleOpenEdit(item)}
+                        >
+                          <Icons.Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 rounded-lg hover:bg-rose-50 hover:text-rose-600 border bg-white shadow-xs text-slate-500"
+                          onClick={() => handleDelete(item.id)}
+                        >
+                          <Icons.Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div className="p-16 text-center text-slate-400 font-bold italic text-sm">
+                  <Icons.Inbox className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  Tidak ada aksesoris
+                </div>
+              )}
             </div>
 
             {/* Pagination */}

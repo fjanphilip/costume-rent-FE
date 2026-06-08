@@ -29,7 +29,11 @@ export function TrendingGrid({ costumes = [] }) {
           const price = outfit.rental_price || outfit.price || 0;
 
           return (
-            <div key={outfit.id} className="group flex flex-col gap-4 bg-white p-4 rounded-[2rem] border border-transparent hover:border-primary/20 transition-all hover:shadow-xl">
+            <Link
+              key={outfit.id}
+              to={`/catalog/${outfit.slug || outfit.id}`}
+              className="group flex flex-col gap-4 bg-white p-4 rounded-[2rem] border border-transparent hover:border-primary/20 transition-all hover:shadow-xl cursor-pointer text-left"
+            >
               <div className="relative aspect-[4/5] rounded-[1.5rem] overflow-hidden bg-muted">
                 <img
                   src={imageUrl}
@@ -41,15 +45,13 @@ export function TrendingGrid({ costumes = [] }) {
                 </div>
               </div>
               <div className="px-2 flex flex-col gap-1 text-left">
-                <h3 className="font-bold text-lg line-clamp-1">{outfit.name}</h3>
+                <h3 className="font-bold text-lg line-clamp-1 group-hover:text-primary transition-colors">{outfit.name}</h3>
                 <p className="text-primary font-black">Rp {Number(price).toLocaleString('id-ID')}</p>
               </div>
-              <Link to={`/catalog/${outfit.slug || outfit.id}`} className="w-full">
-                <Button className="w-full h-11 rounded-xl font-bold bg-muted text-foreground hover:bg-primary hover:text-white transition-all active:scale-95 shadow-none hover:shadow-lg hover:shadow-primary/20">
-                  View Detail
-                </Button>
-              </Link>
-            </div>
+              <div className="w-full h-11 inline-flex items-center justify-center rounded-xl font-bold bg-muted text-foreground group-hover:bg-primary group-hover:text-white transition-all active:scale-95 shadow-none group-hover:shadow-lg group-hover:shadow-primary/20 text-sm">
+                View Detail
+              </div>
+            </Link>
           );
         })}
       </div>

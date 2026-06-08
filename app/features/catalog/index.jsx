@@ -113,7 +113,7 @@ export default function CatalogFeature() {
                           alt={product.name}
                           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         />
-                        <div className="absolute top-4 right-4 h-10 w-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="absolute top-4 right-4 h-10 w-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 lg:opacity-0 lg:group-hover:opacity-100 opacity-100 transition-opacity">
                           <Icons.Heart className="h-5 w-5" />
                         </div>
                         <div className="absolute bottom-4 left-4 flex gap-2">
@@ -132,9 +132,9 @@ export default function CatalogFeature() {
                         <p className="text-xl font-black text-primary italic">Rp {product.rental_price.toLocaleString('id-ID')}<span className="text-[10px] not-italic font-bold text-muted-foreground ml-1">/ hari</span></p>
                       </div>
 
-                      <Button className="w-full h-12 rounded-[1.5rem] font-bold text-base shadow-lg shadow-primary/10 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-300">
+                      <div className="w-full h-12 rounded-[1.5rem] font-bold text-base shadow-lg shadow-primary/10 lg:opacity-0 lg:group-hover:opacity-100 opacity-100 lg:translate-y-4 lg:group-hover:translate-y-0 translate-y-0 transition-all duration-300 bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90">
                         Lihat Detail
-                      </Button>
+                      </div>
                     </Link>
                   ))}
 

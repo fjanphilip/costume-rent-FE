@@ -1,22 +1,35 @@
+import { useState } from "react";
 import { NavLink } from "@remix-run/react";
 import * as Icons from "lucide-react";
 import { ADMIN_MENU } from "../constants";
 
 export function AdminSidebar() {
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
   const getIcon = (name) => {
     return Icons[name] || Icons.Circle;
   };
 
-  return (
-    <aside className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col h-screen sticky top-0 flex-shrink-0 text-slate-300">
-      <div className="p-8 pb-10 flex items-center gap-3">
-        <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center">
-          <Icons.Shield className="h-6 w-6 text-white" />
+  const SidebarContent = ({ isMobile = false }) => (
+    <>
+      <div className="p-8 pb-10 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center">
+            <Icons.Shield className="h-6 w-6 text-white" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-black text-xl tracking-tighter text-white italic leading-none">ADMIN<span className="text-primary">PANEL</span></span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 mt-1">Costume Rent v1.0</span>
+          </div>
         </div>
-        <div className="flex flex-col">
-          <span className="font-black text-xl tracking-tighter text-white italic leading-none">ADMIN<span className="text-primary">PANEL</span></span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500 mt-1">Costume Rent v1.0</span>
-        </div>
+        {isMobile && (
+          <button 
+            onClick={() => setIsMobileOpen(false)} 
+            className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-400 transition-colors"
+          >
+            <Icons.X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 px-6 space-y-2 overflow-y-auto custom-scrollbar">
@@ -28,6 +41,7 @@ export function AdminSidebar() {
               key={item.label}
               to={item.href}
               end={item.href === "/admin"}
+              onClick={() => isMobile && setIsMobileOpen(false)}
               className={({ isActive }) => `
                 flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all group
                 ${isActive 
@@ -55,13 +69,51 @@ export function AdminSidebar() {
              <span className="text-[10px] text-slate-500">Super Admin Mode</span>
            </div>
         </div>
-        <form action="/logout" method="post">
-          <button type="submit" className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-rose-400 hover:bg-rose-500/10 w-full transition-all">
+        <form action="/logout" method="post" onSubmit={() => isMobile && setIsMobileOpen(false)}>
+          <button type="submit" className="flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-rose-400 hover:bg-rose-500/10 w-full transition-all text-left">
             <Icons.LogOut className="h-5 w-5" />
             Sign Out
           </button>
         </form>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile Top Bar */}
+      <div className="lg:hidden flex items-center justify-between h-16 px-6 bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-40 w-full">
+        <div className="flex items-center gap-3">
+          <Icons.Shield className="h-5 w-5 text-primary" />
+          <span className="font-black text-lg tracking-tighter text-white italic leading-none">ADMIN<span className="text-primary">PANEL</span></span>
+        </div>
+        <button 
+          onClick={() => setIsMobileOpen(true)} 
+          className="p-2 hover:bg-slate-800 rounded-xl text-slate-300 transition-colors active:scale-95"
+        >
+          <Icons.Menu className="h-6 w-6" />
+        </button>
+      </div>
+
+      {/* Mobile Drawer Slide-over */}
+      {isMobileOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setIsMobileOpen(false)}
+        >
+          <aside 
+            className="absolute left-0 top-0 bottom-0 w-72 bg-slate-900 text-slate-300 flex flex-col shadow-2xl border-r border-slate-800 animate-in slide-in-from-left duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <SidebarContent isMobile={true} />
+          </aside>
+        </div>
+      )}
+
+      {/* Desktop Sidebar (Permanent) */}
+      <aside className="hidden lg:flex w-72 bg-slate-900 border-r border-slate-800 flex-col h-screen sticky top-0 flex-shrink-0 text-slate-300">
+        <SidebarContent isMobile={false} />
+      </aside>
+    </>
   );
 }
