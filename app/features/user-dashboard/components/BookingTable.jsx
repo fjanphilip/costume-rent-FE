@@ -135,7 +135,7 @@ export function BookingTable({
         )}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="hidden lg:block overflow-x-auto">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b bg-slate-50/50">
@@ -313,6 +313,171 @@ export function BookingTable({
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="lg:hidden divide-y divide-slate-100 bg-white">
+        {bookings.length > 0 ? bookings.map((booking) => {
+          const imageUrl = booking.costume?.images?.[0] ? `${booking.costume.images[0].image_path}` : "https://via.placeholder.com/100";
+          const grandTotal = Number(booking.total_rental_fee) +
+            Number(booking.locked_deposit_amount) +
+            Number(booking.shipping_cost || 0) +
+            (booking.accessories?.reduce((sum, acc) => sum + Number(acc.pivot?.price_at_booking || acc.rental_price), 0) || 0);
+
+          return (
+            <div key={booking.id} className="p-6 space-y-4 text-left">
+              {/* Header Info */}
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-14 rounded-xl overflow-hidden bg-slate-100 border border-slate-100 shadow-sm flex-shrink-0">
+                  <img
+                    src={imageUrl}
+                    className="w-full h-full object-cover"
+                    alt={booking.costume?.name}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-sm text-slate-900 truncate leading-snug">{booking.costume?.name || "Deleted Costume"}</h4>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{booking.booking_code}</p>
+                </div>
+                <Badge className={`border-none font-bold text-[9px] rounded-lg px-2.5 py-0.5 shadow-xs shrink-0 ${getStatusColor(booking.status)}`}>
+                  {booking.status.toUpperCase()}
+                </Badge>
+              </div>
+
+              {/* Rental Period & Resi */}
+              <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-50 text-xs">
+                <div className="space-y-1">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Rental Period</p>
+                  <p className="font-semibold text-slate-700">{formatDate(booking.start_date)}</p>
+                  <p className="text-[10px] text-slate-400">s/d {formatDate(booking.end_date)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Nomor Resi</p>
+                  {booking.tracking_number ? (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[9px] font-bold text-primary bg-primary/5 px-2 py-0.5 rounded-md border border-primary/10 uppercase truncate max-w-[100px]">{booking.tracking_number}</span>
+                      <button
+                        onClick={() => handleCopyResi(booking.tracking_number)}
+                        className="p-1 hover:bg-primary hover:text-white bg-slate-50 text-slate-400 rounded-lg transition-colors border"
+                      >
+                        <Icons.Copy className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 text-slate-400 italic">
+                      <Icons.Clock className="h-3 w-3 shrink-0" />
+                      <span className="text-[10px]">Pending Admin</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Total & Action Buttons */}
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pt-1">
+                <div>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total Pembayaran</p>
+                  <p className="text-lg font-black text-slate-900">Rp {grandTotal.toLocaleString('id-ID')}</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg h-9 px-4 text-xs font-semibold border hover:bg-slate-900 hover:text-white transition-all active:scale-95 flex-1 sm:flex-none"
+                    onClick={() => setSelectedBooking(booking)}
+                  >
+                    Detail
+                  </Button>
+
+                  {((booking.status?.value || booking.status) === 'Pending_Payment') && (
+                    <Button
+                      size="sm"
+                      className="rounded-lg h-9 px-4 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 flex-1 sm:flex-none"
+                      onClick={() => handlePayment(booking.id)}
+                    >
+                      Bayar
+                    </Button>
+                  )}
+
+                  {((booking.status?.value || booking.status) === 'Shipping') && (
+                    <Button
+                      size="sm"
+                      className="rounded-lg h-9 px-4 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95 flex-1 sm:flex-none"
+                      onClick={() => handleConfirmReceived(booking.id)}
+                    >
+                      Terima
+                    </Button>
+                  )}
+
+                  {((booking.status?.value || booking.status) === 'Rented') && (
+                    <Button
+                      size="sm"
+                      className="rounded-lg h-9 px-4 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 flex-1 sm:flex-none"
+                      onClick={() => {
+                        setSelectedBooking(booking);
+                        setReturnModalOpen(true);
+                      }}
+                    >
+                      Kembalikan
+                    </Button>
+                  )}
+
+                  {((booking.status?.value || booking.status)?.toLowerCase() === 'returned') && !booking.returned_at && (
+                    <div className="flex items-center justify-center gap-2 text-amber-600 px-3 py-1.5 bg-amber-50 rounded-lg border border-amber-200 animate-pulse whitespace-nowrap flex-1 sm:flex-none">
+                      <Icons.Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="text-[10px] font-semibold">Pengecekan Admin</span>
+                    </div>
+                  )}
+
+                  {((booking.status?.value || booking.status)?.toLowerCase() === 'returned') && booking.returned_at && (
+                    <div className="w-full sm:w-auto mt-2 sm:mt-0 flex gap-2">
+                      {Number(booking.total_fine) > Number(booking.locked_deposit_amount) ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="rounded-xl h-10 px-4 font-semibold text-xs bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 active:scale-95 flex items-center justify-center gap-2 flex-1 w-full"
+                          onClick={() => {
+                            setSelectedBooking(booking);
+                            setFineModalOpen(true);
+                          }}
+                        >
+                          <Icons.AlertCircle className="h-4 w-4" />
+                          Bayar Denda
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="rounded-lg h-9 px-4 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95 flex-1 w-full justify-center"
+                          onClick={() => {
+                            const adminPhone = "6283832352467";
+                            const amount = Number(booking.locked_deposit_amount);
+                            const finalAmount = amount - (Number(booking.total_fine) || 0);
+                            const message = `Halo Admin, saya ingin mengajukan pengembalian deposit:\n\n` +
+                              `No. Booking: ${booking.booking_code}\n` +
+                              `Deposit Awal: Rp ${amount.toLocaleString('id-ID')}\n` +
+                              `Total Denda: Rp ${(Number(booking.total_fine) || 0).toLocaleString('id-ID')}\n` +
+                              `Estimasi Refund: Rp ${finalAmount.toLocaleString('id-ID')}\n\n` +
+                              `Mohon segera diproses ke rekening saya. Terima kasih.`;
+                            const whatsappUrl = `https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`;
+                            window.open(whatsappUrl, '_blank');
+                          }}
+                        >
+                          Tarik Deposit
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        }) : (
+          <div className="p-16 text-center text-slate-400 font-bold italic text-sm">
+            <Icons.ShoppingBag className="h-12 w-12 mx-auto mb-3 opacity-20" />
+            Belum ada pesanan
+          </div>
+        )}
       </div>
 
       {/* Booking Detail Modal */}

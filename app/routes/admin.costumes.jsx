@@ -129,17 +129,17 @@ export default function AdminCostumesPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#F8FAFC]">
       <AdminSidebar />
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto px-6 py-10 space-y-10 max-w-7xl text-left">
-          <div className="flex justify-between items-end">
+        <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-10 max-w-7xl text-left">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
             <div className="flex flex-col gap-1">
               <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Katalog Kostum</h1>
-              <p className="text-slate-500">Kelola koleksi kostum, stok, dan harga penyewaan.</p>
+              <p className="text-slate-500 text-sm">Kelola koleksi kostum, stok, dan harga penyewaan.</p>
             </div>
             <Button
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl h-12 px-6 shadow-lg shadow-slate-900/10"
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl h-12 px-6 shadow-lg shadow-slate-900/10 w-full sm:w-auto justify-center"
               onClick={handleOpenAdd}
             >
               <Icons.Plus className="h-4 w-4 mr-2" /> Tambah Kostum
@@ -147,7 +147,8 @@ export default function AdminCostumesPage() {
           </div>
 
           <Card className="border border-slate-200 shadow-sm rounded-[2rem] overflow-hidden bg-white">
-            <div className="overflow-x-auto">
+            {/* Desktop View */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -220,6 +221,65 @@ export default function AdminCostumesPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile View */}
+            <div className="lg:hidden divide-y divide-slate-100 bg-white">
+              {costumes.length > 0 ? costumes.map((costume) => (
+                <div key={costume.id} className="p-6 space-y-4 text-left">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-12 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 flex-shrink-0">
+                      <img
+                        src={costume.images?.[0] ? `${costume.images[0].image_path}` : "https://via.placeholder.com/100"}
+                        className="w-full h-full object-cover"
+                        alt=""
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-sm text-slate-900 truncate leading-snug">{costume.name}</h4>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{costume.series} | Size {costume.size}</p>
+                    </div>
+                    <Badge className={`rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider shrink-0 ${costume.status === 'available' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                      costume.status === 'rented' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                        'bg-slate-50 text-slate-600 border-slate-100'
+                      }`}>
+                      {costume.status}
+                    </Badge>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-50 text-xs">
+                    <div>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Harga Sewa</p>
+                      <p className="font-extrabold text-sm text-slate-800">Rp {Number(costume.rental_price).toLocaleString('id-ID')}</p>
+                      <p className="text-[9px] text-slate-400">Dep: Rp {Number(costume.required_deposit).toLocaleString('id-ID')}</p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-lg hover:bg-slate-100 border bg-white shadow-xs text-slate-500"
+                        onClick={() => handleOpenEdit(costume)}
+                      >
+                        <Icons.Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-lg hover:bg-rose-50 hover:text-rose-600 border bg-white shadow-xs text-slate-500"
+                        onClick={() => handleDelete(costume.id)}
+                      >
+                        <Icons.Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <div className="p-16 text-center text-slate-400 font-bold italic text-sm">
+                  <Icons.Inbox className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  Tidak ada kostum
+                </div>
+              )}
             </div>
 
             {/* Pagination Controls */}

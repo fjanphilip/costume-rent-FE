@@ -62,11 +62,11 @@ export default function AdminWithdrawalsPage() {
   const { transactions } = useLoaderData();
 
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#F8FAFC]">
       <AdminSidebar />
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto px-6 py-10 space-y-10 max-w-7xl">
-          <AdminWithdrawalsFeature transactions={transactions} />
+        <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-10 max-w-7xl">
+           <AdminWithdrawalsFeature transactions={transactions} />
         </div>
       </main>
     </div>

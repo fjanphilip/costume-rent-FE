@@ -70,8 +70,8 @@ export default function CostumeDetailFeature() {
           <div className="flex flex-col lg:flex-row gap-16">
 
             {/* Left: Fixed Gallery */}
-            <div className="lg:w-[50%]">
-              <div className="sticky top-32 space-y-6">
+            <div className="w-full lg:w-[50%]">
+              <div className="lg:sticky lg:top-32 space-y-6">
                 <div className="relative aspect-[4/5] rounded-[3rem] overflow-hidden bg-white border-8 border-white shadow-2xl shadow-primary/5 group">
                   <img
                     src={selectedImage ? `${selectedImage}` : "https://images.unsplash.com/photo-1608831540955-35094d48694a?w=800&q=80"}
@@ -104,7 +104,7 @@ export default function CostumeDetailFeature() {
             </div>
 
             {/* Right: Detailed Info */}
-            <div className="lg:w-[50%] space-y-12">
+            <div className="w-full lg:w-[50%] space-y-12">
               <div className="space-y-4">
                 <h1 className="text-5xl font-black tracking-tight leading-none text-slate-900 group">
                   {costume.name}
@@ -118,7 +118,7 @@ export default function CostumeDetailFeature() {
               </div>
 
               {/* Action: Booking Card (Main Focus) */}
-              <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl shadow-slate-900/10 relative overflow-hidden group">
+              <div className="bg-slate-900 rounded-[3rem] p-6 sm:p-10 text-white shadow-2xl shadow-slate-900/10 relative overflow-hidden group">
                 <div className="absolute -right-10 -top-10 h-40 w-40 bg-primary opacity-20 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
 
                 <div className="space-y-8 relative z-10">
@@ -138,14 +138,14 @@ export default function CostumeDetailFeature() {
                     <p className="text-[10px] text-primary/80 font-bold italic">* Minimal durasi penyewaan adalah 3 hari.</p>
                   </div>
 
-                  <div className="pt-6 border-t border-white/10 flex justify-between items-end">
+                  <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row justify-between sm:items-end gap-4">
                     <div>
                       <p className="text-[10px] font-black uppercase text-white/40 mb-1">Total Biaya Sewa</p>
                       <p className="text-3xl font-white text-white italic ">Rp {totalRental.toLocaleString('id-ID')}</p>
                     </div>
                     <Link
                       to={user?.is_verified ? `/checkout?costume_slug=${costume.slug}${date?.from ? `&start_date=${format(date.from, "yyyy-MM-dd")}` : ""}${date?.to ? `&end_date=${format(date.to, "yyyy-MM-dd")}` : ""}` : "/dashboard"}
-                      className="inline-block"
+                      className="w-full sm:w-auto inline-block"
                     >
                       <Button
                         className={`h-16 px-10 rounded-2xl transition-all text-base group w-full font-black shadow-2xl ${!user?.is_verified
@@ -172,7 +172,7 @@ export default function CostumeDetailFeature() {
               </div>
 
               {/* Secondary Details: Tabs/Grid */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2 italic">
                     <Icons.Info className="h-4 w-4 text-primary" /> Informasi Produk

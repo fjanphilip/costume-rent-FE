@@ -111,7 +111,8 @@ export default function AdminWithdrawalsFeature({ transactions: initialTransacti
       </div>
 
       <Card className="border border-slate-200 shadow-sm rounded-2xl overflow-hidden bg-white">
-        <div className="overflow-x-auto">
+        {/* Desktop View */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
@@ -186,6 +187,78 @@ export default function AdminWithdrawalsFeature({ transactions: initialTransacti
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="lg:hidden divide-y divide-slate-100 bg-white">
+          {filteredTransactions.length > 0 ? filteredTransactions.map((tx) => {
+            const bankLogo = getBankLogo(tx.user?.bank_name);
+            return (
+              <div key={tx.id} className="p-6 space-y-4 text-left">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-bold text-slate-900 leading-snug">{tx.user?.name}</span>
+                    <span className="text-[10px] font-bold text-slate-400 font-mono mt-0.5">{tx.reference_id}</span>
+                  </div>
+                  <Badge variant="outline" className={`border-none font-bold text-[9px] rounded-lg px-2.5 py-1 tracking-widest shrink-0 ${
+                    tx.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 
+                    tx.status === 'Rejected' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                  }`}>
+                    {tx.status === 'Completed' ? 'APPROVED' : tx.status.toUpperCase()}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-50 text-xs">
+                  <div className="space-y-0.5">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Amount</p>
+                    <p className="font-extrabold text-sm text-slate-800">{formatIDR(tx.amount)}</p>
+                    <p className="text-[9px] text-slate-400">{new Date(tx.created_at).toLocaleDateString('id-ID')}</p>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Bank Target</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="h-6 w-6 bg-white border rounded flex items-center justify-center p-1 shrink-0">
+                        {bankLogo ? (
+                          <img src={bankLogo} alt="" className="h-full w-full object-contain" />
+                        ) : (
+                          <Icons.CreditCard className="h-3 w-3 text-slate-300" />
+                        )}
+                      </div>
+                      <span className="font-semibold text-slate-700 text-[10px] truncate max-w-[80px]">{tx.user?.bank_account_number}</span>
+                    </div>
+                    <p className="text-[8px] text-slate-400 font-medium uppercase truncate max-w-[90px]">A/N {tx.user?.bank_account_name}</p>
+                  </div>
+                </div>
+
+                {tx.status === 'Pending' && (
+                  <div className="flex gap-2 justify-end pt-1">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => { setSelectedTx(tx); setIsApproveModalOpen(true); }}
+                      className="border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-xl font-bold text-[10px] h-9 px-4 active:scale-95 transition-transform"
+                    >
+                      APPROVE
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => { setSelectedTx(tx); setIsRejectModalOpen(true); }}
+                      className="border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl font-bold text-[10px] h-9 px-4 active:scale-95 transition-transform"
+                    >
+                      REJECT
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          }) : (
+            <div className="p-16 text-center text-slate-400 font-bold italic text-sm">
+              <Icons.Inbox className="h-12 w-12 mx-auto mb-3 opacity-20" />
+              Tidak ada penarikan dana
+            </div>
+          )}
         </div>
       </Card>
 

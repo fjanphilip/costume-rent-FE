@@ -28,11 +28,11 @@ export default function DashboardLayout() {
   const { user } = useLoaderData();
   
   return (
-    <div className="flex min-h-screen bg-[#FBFBFE]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#FBFBFE]">
       <UserSidebar user={user} />
       
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto px-4 md:px-8 lg:px-12 max-w-7xl py-10 space-y-8 text-left">
+        <div className="container mx-auto px-4 md:px-8 lg:px-12 max-w-7xl py-6 sm:py-10 space-y-8 text-left">
            <Outlet context={{ user }} />
         </div>
       </main>

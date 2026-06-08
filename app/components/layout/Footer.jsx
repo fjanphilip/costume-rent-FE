@@ -9,7 +9,7 @@ export function Footer() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
                <div className="space-y-6">
                   <Link to="/" className="flex items-center gap-2">
-                     <span className="font-extrabold text-2xl tracking-tighter italic text-primary">SewaCosplay</span>
+                     <span className="font-extrabold text-2xl tracking-tighter text-white italic text-primary">SewaCosplay</span>
                   </Link>
                   <p className="text-white/60 text-sm leading-relaxed max-w-xs">
                      Platform penyewaan kostum anime dan tradisional nomor 1 di Indonesia. Wujudkan karakter impianmu bersama kami.

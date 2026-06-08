@@ -218,7 +218,7 @@ export default function CheckoutFeature() {
 
                   {/* 1. Header Section (Product Info) */}
                   <div className="p-8 sm:p-12 border-b border-slate-50 relative overflow-hidden">
-                     <div className="absolute top-0 right-0 p-8">
+                     <div className="absolute top-0 right-0 p-8 hidden md:block">
                         <Badge className="bg-primary/5 text-primary border-none px-4 py-2 text-[10px] font-black uppercase tracking-widest leading-none">
                            {costume.series}
                         </Badge>
@@ -232,7 +232,12 @@ export default function CheckoutFeature() {
                               alt=""
                            />
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-4 w-full">
+                           <div className="md:hidden flex justify-center">
+                              <Badge className="bg-primary/5 text-primary border-none px-4 py-2 text-[10px] font-black uppercase tracking-widest leading-none">
+                                 {costume.series}
+                              </Badge>
+                           </div>
                            <h2 className="text-4xl font-black italic text-slate-900 leading-none">{costume.name}</h2>
                            <div className="flex flex-wrap justify-center md:justify-start gap-3">
                               <span className="px-4 py-1.5 rounded-full bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-widest border border-slate-100">Size: {costume.size}</span>
@@ -557,7 +562,7 @@ export default function CheckoutFeature() {
                               </div>
 
                               <div className="pt-6 border-t border-slate-200 mt-6 space-y-8">
-                                 <div className="flex justify-between items-end">
+                                 <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4">
                                     <div className="space-y-1">
                                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Total Pembayaran</span>
                                        <div className="flex gap-1">
