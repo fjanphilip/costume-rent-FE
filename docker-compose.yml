@@ -1,0 +1,13 @@
+services:
+  frontend:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: costume_rent_frontend
+    restart: unless-stopped
+    # Port 3000 bisa tetap di-expose untuk testing, 
+    # atau dihapus jika ingin akses HANYA lewat Nginx.
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env

@@ -1,6 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData, Outlet } from "@remix-run/react";
 import { getSession } from "~/lib/session.server";
+import { getApiClient } from "~/lib/api";
 import { UserSidebar } from "~/features/user-dashboard/components/UserSidebar";
 
 export const loader = async ({ request }) => {
@@ -14,17 +15,8 @@ export const loader = async ({ request }) => {
   }
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/user", {
-      headers: {
-        "Accept": "application/json",
-        "Authorization": `Bearer ${token}`
-      }
-    });
-
-    if (response.ok) {
-      const freshUser = await response.json();
-      return json({ user: freshUser });
-    }
+    const response = await getApiClient(token).get("/user");
+    return json({ user: response.data.user || response.data });
   } catch (error) {
     console.error("Dashboard Loader Error:", error);
   }
@@ -36,11 +28,11 @@ export default function DashboardLayout() {
   const { user } = useLoaderData();
   
   return (
-    <div className="flex min-h-screen bg-[#FBFBFE]">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-[#FBFBFE]">
       <UserSidebar user={user} />
       
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto px-4 md:px-8 lg:px-12 max-w-7xl py-10 space-y-8 text-left">
+        <div className="container mx-auto px-4 md:px-8 lg:px-12 max-w-7xl py-6 sm:py-10 space-y-8 text-left">
            <Outlet context={{ user }} />
         </div>
       </main>
